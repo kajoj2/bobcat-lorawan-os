@@ -15,7 +15,13 @@ SRCREV = "25ee84684a77b2cae160bc392d7f1d7e0fa0385b"
 
 require ${BPN}-crates.inc
 
-DEPENDS += "protobuf-native zeromq"
+# C/C++ that crates build themselves (vendored libzmq in zmq-sys, librdkafka, ...) lives in cargo_home under
+# UNPACKDIR, which the default prefix maps do not cover, so __FILE__ in its asserts would leak TMPDIR into the
+# binary (QA "buildpaths").
+DEBUG_PREFIX_MAP_EXTRA = "-ffile-prefix-map=${UNPACKDIR}=${TARGET_DBGSRC_DIR}"
+
+# zmq-sys always builds its own libzmq (zeromq-src).
+DEPENDS += "protobuf-native"
 export PROTOC = "${STAGING_BINDIR_NATIVE}/protoc"
 
 do_install:append() {

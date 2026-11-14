@@ -17,13 +17,18 @@ SRCREV = "0904a8ddf4eeb3150b4675b35f067865cb68827d"
 
 require ${BPN}-crates.inc
 
+# C/C++ that crates build themselves (vendored libzmq in zmq-sys, librdkafka, ...) lives in cargo_home under
+# UNPACKDIR, which the default prefix maps do not cover, so __FILE__ in its asserts would leak TMPDIR into the
+# binary (QA "buildpaths").
+DEBUG_PREFIX_MAP_EXTRA = "-ffile-prefix-map=${UNPACKDIR}=${TARGET_DBGSRC_DIR}"
+
 # Build only the SX1302 daemon of the workspace; the lock file is the workspace's.
 CARGO_SRC_DIR = "chirpstack-concentratord-sx1302"
 CARGO_LOCK_PATH = "${S}/Cargo.lock"
 
-# libloragw-sx1302 (static) is bound with bindgen, which needs libclang; prost-build needs protoc; the ZeroMQ API
-# links the system libzmq.
-DEPENDS += "libloragw-sx1302 clang-native protobuf-native zeromq"
+# libloragw-sx1302 (static) is bound with bindgen, which needs libclang; prost-build needs protoc. zmq-sys always
+# builds its own libzmq (zeromq-src), so no zeromq dependency.
+DEPENDS += "libloragw-sx1302 clang-native protobuf-native"
 
 export PROTOC = "${STAGING_BINDIR_NATIVE}/protoc"
 export LIBCLANG_PATH = "${STAGING_LIBDIR_NATIVE}"
