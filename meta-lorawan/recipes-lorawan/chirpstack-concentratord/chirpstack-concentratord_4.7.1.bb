@@ -19,8 +19,8 @@ require ${BPN}-crates.inc
 
 # C/C++ that crates build themselves (vendored libzmq in zmq-sys, librdkafka, ...) lives in cargo_home under
 # UNPACKDIR, which the default prefix maps do not cover, so __FILE__ in its asserts would leak TMPDIR into the
-# binary (QA "buildpaths").
-DEBUG_PREFIX_MAP_EXTRA = "-ffile-prefix-map=${UNPACKDIR}=${TARGET_DBGSRC_DIR}"
+# binary (QA "buildpaths"). An append, because rust-common.bbclass empties DEBUG_PREFIX_MAP_EXTRA for gcc.
+DEBUG_PREFIX_MAP:append = " -ffile-prefix-map=${UNPACKDIR}/cargo_home=${TARGET_DBGSRC_DIR}/cargo_home"
 
 # Build only the SX1302 daemon of the workspace; the lock file is the workspace's.
 CARGO_SRC_DIR = "chirpstack-concentratord-sx1302"
