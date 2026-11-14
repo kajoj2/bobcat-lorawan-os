@@ -24,6 +24,9 @@ DEBUG_PREFIX_MAP:append = " -ffile-prefix-map=${UNPACKDIR}/cargo_home=${TARGET_D
 DEPENDS += "protobuf-native"
 export PROTOC = "${STAGING_BINDIR_NATIVE}/protoc"
 
+# Upstream's release profile strips the binary; leave that to Yocto, which splits the debug info into -dbg.
+export CARGO_PROFILE_RELEASE_STRIP = "false"
+
 do_install:append() {
     install -d ${D}${systemd_system_unitdir}
     install -m 0644 ${UNPACKDIR}/chirpstack-mqtt-forwarder.service ${D}${systemd_system_unitdir}/
