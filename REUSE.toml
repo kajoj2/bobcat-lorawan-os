@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Copyright and licensing for files without (complete) SPDX headers (https://reuse.software/spec-3.3/).
+# Files carry their own SPDX-License-Identifier; this supplies the copyright line for all of them, and the license
+# for files that cannot carry a header (generated crate lists, patches, lock files).
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
+SPDX-License-Identifier = "MIT"

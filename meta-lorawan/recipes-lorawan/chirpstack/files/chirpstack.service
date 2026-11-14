@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=ChirpStack LoRaWAN Network Server
+Documentation=https://www.chirpstack.io/docs/
+After=network-online.target redis.service mosquitto.service lorawan-secrets.service
+Wants=network-online.target redis.service mosquitto.service
+Requires=lorawan-secrets.service
+
+[Service]
+User=chirpstack
+Group=chirpstack
+# CHIRPSTACK_API_SECRET, generated on the first boot; chirpstack.toml refers to it as $CHIRPSTACK_API_SECRET.
+EnvironmentFile=/var/lib/lorawan-secrets/chirpstack.env
+# chirpstack.toml and the region files; the SQLite database is in /var/lib/chirpstack.
+ExecStart=/usr/bin/chirpstack -c /etc/chirpstack
+StateDirectory=chirpstack
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

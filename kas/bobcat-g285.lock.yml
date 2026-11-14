@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Pinned revisions for kas/bobcat-g285.yml (kas applies this file automatically). Refresh with
+# `kas lock kas/bobcat-g285.yml`, review the changes, build, then commit.
+header:
+  version: 14
+overrides:
+  repos:
+    bitbake:
+      commit: 6e260eb6ab1631607ea414d9ff8ede1155faa5d9
+    openembedded-core:
+      commit: 33a6bd6cc8a9a976902081642414bd67adc74879
+    meta-openembedded:
+      commit: c0fcd7cca3760ef24e087ac4a31b8f357cb204da
+    meta-arm:
+      commit: 673e8d7c5dcd14de58092eb73e6ecc5eee5c1735
+    meta-rockchip:
+      commit: b6bc140cc2e1f8e811fb84ce15428a1412b7f242

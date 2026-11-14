@@ -1,0 +1,253 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: karol <karolprzybylak1@gmail.com>
+Date: Sat, 14 Nov 2026 20:21:21 +0100
+Subject: [PATCH] sx1302: add Bobcat Miner 300 (G285) model
+
+The Bobcat Miner 300 G285 is a Rockchip RK3566 board with an SX1302 +
+2x SX1250 mini-PCIe card on SPI1. The SX1302 reset is on GPIO4_C5 and the
+socket power on GPIO3_D2; the card has no STTS751 temperature sensor.
+
+RF parameters are the Semtech SX1302C868GW1 reference values for now.
+
+Upstream-Status: Pending [to be offered upstream once tested on a board]
+---
+ .../src/config/mod.rs                         |   1 +
+ .../src/config/vendor/bobcat/miner300_g285.rs | 195 ++++++++++++++++++
+ .../src/config/vendor/bobcat/mod.rs           |   1 +
+ .../src/config/vendor/mod.rs                  |   1 +
+ 4 files changed, 198 insertions(+)
+ create mode 100644 chirpstack-concentratord-sx1302/src/config/vendor/bobcat/miner300_g285.rs
+ create mode 100644 chirpstack-concentratord-sx1302/src/config/vendor/bobcat/mod.rs
+
+diff --git a/chirpstack-concentratord-sx1302/src/config/mod.rs b/chirpstack-concentratord-sx1302/src/config/mod.rs
+index 76d66ee..9ecfdc5 100644
+--- a/chirpstack-concentratord-sx1302/src/config/mod.rs
++++ b/chirpstack-concentratord-sx1302/src/config/mod.rs
+@@ -366,6 +366,7 @@ pub fn get(filenames: Vec<String>) -> Configuration {
+ 
+     // get model configuration
+     config.gateway.model_config = match config.gateway.model.as_ref() {
++        "bobcat_miner300_g285" => vendor::bobcat::miner300_g285::new(&config).unwrap(),
+         "dragino_pg1302" => vendor::dragino::pg1302::new(&config).unwrap(),
+         "elecrow_lr1302" => vendor::elecrow::lr1302::new(&config).unwrap(),
+         "embit_emb_lr1302_mpcie" => vendor::embit::emb_lr1302_mpcie::new(&config).unwrap(),
+diff --git a/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/miner300_g285.rs b/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/miner300_g285.rs
+new file mode 100644
+index 0000000..3b41348
+--- /dev/null
++++ b/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/miner300_g285.rs
+@@ -0,0 +1,195 @@
++use anyhow::Result;
++use libconcentratord::{gnss, region};
++use libloragw_sx1302::hal;
++
++use super::super::super::super::config::{self, Region};
++use super::super::{ComType, Configuration, RadioConfig};
++
++// Bobcat Miner 300, board revision G285 (Rockchip RK3566) with its SX1302 + 2x SX1250 mini-PCIe card.
++//
++// Board wiring (https://github.com/docdailey/bobcat-300, docs/os-boot-gpio.md):
++//   * SPI1 -> /dev/spidev1.0
++//   * SX1302 reset: GPIO4_C5 -> gpiochip4 line 21 (pulsed high, then low)
++//   * socket power: GPIO3_D2 -> gpiochip3 line 26 (cycled by the factory reset script)
++//   * the socket rail GPIO3_D5 is an always-on regulator in the device tree
++//   * no STTS751 temperature sensor on the card, so no I2C temperature compensation
++//
++// The RF parameters (RSSI offset, TX gain table) are the Semtech SX1302C868GW1 reference values until the factory
++// values are read from a board.
++pub fn new(conf: &config::Configuration) -> Result<Configuration> {
++    let region = conf.gateway.region.unwrap_or(Region::EU868);
++
++    let tx_min_max_freqs = match region {
++        Region::EU868 => region::eu868::TX_MIN_MAX_FREQS.to_vec(),
++        Region::IN865 => region::in865::TX_MIN_MAX_FREQS.to_vec(),
++        Region::RU864 => region::ru864::TX_MIN_MAX_FREQS.to_vec(),
++        _ => return Err(anyhow!("Region is not supported: {}", region)),
++    };
++
++    let gps = conf.gateway.model_flags.contains(&"GNSS".to_string());
++    let enforce_duty_cycle = conf.gateway.model_flags.contains(&"ENFORCE_DC".to_string());
++
++    Ok(Configuration {
++        enforce_duty_cycle,
++        radio_count: 2,
++        clock_source: 0,
++        full_duplex: false,
++        lora_multi_sf_bandwidth: 125000,
++        radio_config: vec![
++            RadioConfig {
++                tx_min_max_freqs,
++                radio_type: hal::RadioType::SX1250,
++                single_input_mode: true,
++                rssi_offset: -215.4,
++                rssi_temp_compensation: hal::RssiTempCompensationConfig {
++                    coeff_a: 0.0,
++                    coeff_b: 0.0,
++                    coeff_c: 20.41,
++                    coeff_d: 2162.56,
++                    coeff_e: 0.0,
++                },
++                tx_enable: true,
++                tx_gain_table: vec![
++                    // 0
++                    hal::TxGainConfig {
++                        rf_power: 12,
++                        pa_gain: 0,
++                        pwr_idx: 15,
++                        ..Default::default()
++                    },
++                    // 1
++                    hal::TxGainConfig {
++                        rf_power: 13,
++                        pa_gain: 0,
++                        pwr_idx: 16,
++                        ..Default::default()
++                    },
++                    // 2
++                    hal::TxGainConfig {
++                        rf_power: 14,
++                        pa_gain: 0,
++                        pwr_idx: 17,
++                        ..Default::default()
++                    },
++                    // 3
++                    hal::TxGainConfig {
++                        rf_power: 15,
++                        pa_gain: 0,
++                        pwr_idx: 19,
++                        ..Default::default()
++                    },
++                    // 4
++                    hal::TxGainConfig {
++                        rf_power: 16,
++                        pa_gain: 0,
++                        pwr_idx: 20,
++                        ..Default::default()
++                    },
++                    // 5
++                    hal::TxGainConfig {
++                        rf_power: 17,
++                        pa_gain: 0,
++                        pwr_idx: 22,
++                        ..Default::default()
++                    },
++                    // 6
++                    hal::TxGainConfig {
++                        rf_power: 18,
++                        pa_gain: 1,
++                        pwr_idx: 1,
++                        ..Default::default()
++                    },
++                    // 7
++                    hal::TxGainConfig {
++                        rf_power: 19,
++                        pa_gain: 1,
++                        pwr_idx: 2,
++                        ..Default::default()
++                    },
++                    // 8
++                    hal::TxGainConfig {
++                        rf_power: 20,
++                        pa_gain: 1,
++                        pwr_idx: 3,
++                        ..Default::default()
++                    },
++                    // 9
++                    hal::TxGainConfig {
++                        rf_power: 21,
++                        pa_gain: 1,
++                        pwr_idx: 4,
++                        ..Default::default()
++                    },
++                    // 10
++                    hal::TxGainConfig {
++                        rf_power: 22,
++                        pa_gain: 1,
++                        pwr_idx: 5,
++                        ..Default::default()
++                    },
++                    // 11
++                    hal::TxGainConfig {
++                        rf_power: 23,
++                        pa_gain: 1,
++                        pwr_idx: 6,
++                        ..Default::default()
++                    },
++                    // 12
++                    hal::TxGainConfig {
++                        rf_power: 24,
++                        pa_gain: 1,
++                        pwr_idx: 7,
++                        ..Default::default()
++                    },
++                    // 13
++                    hal::TxGainConfig {
++                        rf_power: 25,
++                        pa_gain: 1,
++                        pwr_idx: 9,
++                        ..Default::default()
++                    },
++                    // 14
++                    hal::TxGainConfig {
++                        rf_power: 26,
++                        pa_gain: 1,
++                        pwr_idx: 11,
++                        ..Default::default()
++                    },
++                    // 15
++                    hal::TxGainConfig {
++                        rf_power: 27,
++                        pa_gain: 1,
++                        pwr_idx: 14,
++                        ..Default::default()
++                    },
++                ],
++            },
++            RadioConfig {
++                radio_type: hal::RadioType::SX1250,
++                single_input_mode: false,
++                rssi_offset: -215.4,
++                rssi_temp_compensation: hal::RssiTempCompensationConfig {
++                    coeff_a: 0.0,
++                    coeff_b: 0.0,
++                    coeff_c: 20.41,
++                    coeff_d: 2162.56,
++                    coeff_e: 0.0,
++                },
++                tx_enable: false,
++                tx_min_max_freqs: vec![],
++                tx_gain_table: vec![],
++            },
++        ],
++        gnss: match gps {
++            true => conf
++                .gateway
++                .get_gnss_dev_path(&gnss::Device::new("/dev/ttyS5")),
++            false => gnss::Device::None,
++        },
++        com_type: ComType::Spi,
++        com_path: conf.gateway.get_com_dev_path("/dev/spidev1.0"),
++        sx1302_reset_pin: conf.gateway.get_sx1302_reset_pin("/dev/gpiochip4", 21),
++        sx1302_power_en_pin: conf.gateway.get_sx1302_power_en_pin("/dev/gpiochip3", 26),
++        ..Default::default()
++    })
++}
+diff --git a/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/mod.rs b/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/mod.rs
+new file mode 100644
+index 0000000..73e5419
+--- /dev/null
++++ b/chirpstack-concentratord-sx1302/src/config/vendor/bobcat/mod.rs
+@@ -0,0 +1 @@
++pub mod miner300_g285;
+diff --git a/chirpstack-concentratord-sx1302/src/config/vendor/mod.rs b/chirpstack-concentratord-sx1302/src/config/vendor/mod.rs
+index 35b32b0..2058612 100644
+--- a/chirpstack-concentratord-sx1302/src/config/vendor/mod.rs
++++ b/chirpstack-concentratord-sx1302/src/config/vendor/mod.rs
+@@ -1,6 +1,7 @@
+ use libconcentratord::gnss;
+ use libloragw_sx1302::hal;
+ 
++pub mod bobcat;
+ pub mod dragino;
+ pub mod elecrow;
+ pub mod embit;

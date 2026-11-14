@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+# ChirpStack on the gateway itself: SQLite, local Redis and Mosquitto. Region files (region_*.toml) sit next to
+# this file; only the regions in enabled_regions are used. Full reference:
+# https://www.chirpstack.io/docs/chirpstack/configuration.html
+
+[logging]
+  level = "info"
+
+[sqlite]
+  path = "sqlite:///var/lib/chirpstack/chirpstack.sqlite"
+
+[redis]
+  servers = ["redis://127.0.0.1/"]
+
+[network]
+  net_id = "000000"
+  enabled_regions = ["@REGION_ID@"]
+
+[api]
+  bind = "0.0.0.0:8080"
+  # Generated on the first boot (lorawan-secrets.service), never part of the image.
+  secret = "$CHIRPSTACK_API_SECRET"
+
+[gateway]
+  # Accept frames from gateways that are not registered. Safe here because only this gateway can reach the broker
+  # (Mosquitto listens on localhost only); turn it off before opening the broker to other gateways.
+  allow_unknown_gateways = true
+
+[integration]
+  enabled = ["mqtt"]
+
+  [integration.mqtt]
+    server = "tcp://127.0.0.1:1883/"
+    json = true

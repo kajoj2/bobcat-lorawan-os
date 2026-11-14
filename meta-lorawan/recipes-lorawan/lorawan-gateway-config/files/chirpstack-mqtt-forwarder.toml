@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+# Concentratord (ZeroMQ) <-> local Mosquitto, under the topic prefix ChirpStack's region file listens on.
+
+[logging]
+  level = "info"
+  log_to_syslog = true
+
+[mqtt]
+  topic_prefix = "@REGION_ID@"
+  json = false
+  server = "tcp://127.0.0.1:1883"
+
+[backend]
+  enabled = "concentratord"
+
+  [backend.concentratord]
+    event_url = "ipc:///run/chirpstack-concentratord/event"
+    command_url = "ipc:///run/chirpstack-concentratord/command"

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# kas checkouts and build output
+/build/
+/bitbake/
+/openembedded-core/
+/meta-openembedded/
+/meta-arm/
+/meta-rockchip/
+*.wic
+*.wic.xz
+*.wic.bmap

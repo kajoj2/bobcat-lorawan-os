@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MIT
+# Fast checks only. Full image builds need far more than a hosted runner offers and run on the maintainers'
+# build hosts.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: REUSE (licenses and copyright)
+        uses: fsfe/reuse-action@v5
+
+      - name: Device trees
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq device-tree-compiler
+          tools/check-dts.sh
+
+      - name: Shell scripts
+        run: |
+          shellcheck tools/*.sh $(git ls-files '*.sh')
+
+      - name: Python tools
+        run: python3 -m py_compile tools/*.py
+
+      - name: kas files parse
+        run: |
+          pipx install kas
+          kas dump kas/bobcat-g285.yml > /dev/null

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+# ChirpStack Concentratord, board part. Read together with region.toml and channels.toml (see the service unit).
+# Reference: /etc/chirpstack-concentratord/examples/concentratord.toml
+
+[concentratord]
+  log_level = "INFO"
+  log_to_syslog = true
+  stats_interval = "30s"
+
+  [concentratord.api]
+    event_bind = "ipc:///run/chirpstack-concentratord/event"
+    command_bind = "ipc:///run/chirpstack-concentratord/command"
+
+[gateway]
+  antenna_gain = 0
+  lorawan_public = true
+  region = "@REGION@"
+  model = "@MODEL@"
+  model_flags = []
+  # gateway_id is read from the concentrator when not set.

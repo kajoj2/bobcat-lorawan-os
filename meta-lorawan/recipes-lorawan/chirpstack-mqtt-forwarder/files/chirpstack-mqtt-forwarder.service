@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=ChirpStack MQTT Forwarder
+Documentation=https://www.chirpstack.io/docs/chirpstack-mqtt-forwarder/
+After=chirpstack-concentratord.service mosquitto.service
+Wants=chirpstack-concentratord.service mosquitto.service
+
+[Service]
+ExecStart=/usr/bin/chirpstack-mqtt-forwarder -c /etc/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml
+Restart=on-failure
+RestartSec=5
+# Runs as root for now: it connects to Concentratord's IPC sockets in /run/chirpstack-concentratord, which root
+# creates. Hardening (a shared group for both daemons) is on the roadmap.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

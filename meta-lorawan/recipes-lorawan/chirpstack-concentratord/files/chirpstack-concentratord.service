@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=ChirpStack Concentratord (SX1302)
+Documentation=https://www.chirpstack.io/docs/chirpstack-concentratord/
+# The board configuration (model, region, channel plan) is written by lorawan-gateway-config.
+ConditionPathExists=/etc/chirpstack-concentratord/concentratord.toml
+
+[Service]
+ExecStart=/usr/bin/chirpstack-concentratord-sx1302 \
+    -c /etc/chirpstack-concentratord/concentratord.toml \
+    -c /etc/chirpstack-concentratord/region.toml \
+    -c /etc/chirpstack-concentratord/channels.toml
+Restart=on-failure
+RestartSec=5
+# ZeroMQ IPC sockets (event, command) for chirpstack-mqtt-forwarder; paths set in concentratord.toml.
+RuntimeDirectory=chirpstack-concentratord
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Any wired interface: DHCP (IPv4 and IPv6). mDNS (bobcat-g285.local) is Avahi.
+[Match]
+Type=ether
+Name=en* eth* end*
+
+[Network]
+DHCP=yes
+LinkLocalAddressing=yes
+
+[DHCPv4]
+UseDomains=yes
