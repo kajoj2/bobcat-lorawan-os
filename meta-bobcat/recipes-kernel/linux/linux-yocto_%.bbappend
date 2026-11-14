@@ -4,6 +4,9 @@
 
 FILESEXTRAPATHS:prepend:bobcat := "${THISDIR}/files:"
 
+# meta-rockchip lists its own boards one by one; linux-yocto itself only allows the QEMU machines.
+COMPATIBLE_MACHINE:bobcat = "bobcat"
+
 SRC_URI:append:bobcat = " \
     file://dts/rk3566-bobcat-g285.dts \
     file://bobcat.cfg \
