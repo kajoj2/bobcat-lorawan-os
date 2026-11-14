@@ -6,8 +6,8 @@ An open-source Yocto Linux image that turns a retired **Bobcat Miner 300** Heliu
 sensors work on your LAN without any cloud service. Its MQTT integration feeds Home Assistant, Node-RED or anything
 else that speaks MQTT.
 
-> **Status: pre-alpha, not yet booted on hardware.** The image is written and parses; the first board is on its
-> way. Do not flash it expecting a working gateway yet. See [docs/bringup-checklist.md](docs/bringup-checklist.md)
+> **Status: pre-alpha, not yet booted on hardware.** The image builds (Yocto 6.0, 68 MB compressed); the first
+> board is on its way. Do not flash it expecting a working gateway yet. See [docs/bringup-checklist.md](docs/bringup-checklist.md)
 > for what has to be verified, and [CHANGELOG.md](CHANGELOG.md) for progress.
 
 This project is not affiliated with, endorsed by or supported by Bobcat or its manufacturer. "Bobcat" is used only

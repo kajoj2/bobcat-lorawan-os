@@ -58,3 +58,5 @@ Short records; newest last. Each says what was chosen and why, so a later change
 - Updates: whole-image A/B (RAUC, `meta-rockchip` has a demo) or package feed?
 - ChirpStack web interface build needs the network (pnpm); make it offline (vendored store or Yocto's npm fetcher).
 - A first-boot way to set the ChirpStack admin password and open MQTT to the LAN with credentials.
+- The kernel version ends in `-dirty` because the DTS is copied into the kernel's git tree; carry it as a patch or
+  set `LOCALVERSION`.
