@@ -42,11 +42,11 @@ do_install() {
     subst ${UNPACKDIR}/chirpstack.toml > ${D}${sysconfdir}/chirpstack/chirpstack.toml
     subst ${UNPACKDIR}/concentratord.toml > ${D}${sysconfdir}/chirpstack-concentratord/concentratord.toml
     subst ${UNPACKDIR}/chirpstack-mqtt-forwarder.toml > ${D}${sysconfdir}/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml
-    # Region and channel plan straight from Concentratord's examples
-    ln -sf examples/region_${LORAWAN_REGION_ID}.toml ${D}${sysconfdir}/chirpstack-concentratord/region.toml
-    ln -sf examples/channels_${LORAWAN_REGION_ID}.toml ${D}${sysconfdir}/chirpstack-concentratord/channels.toml
     chmod 0644 ${D}${sysconfdir}/chirpstack/*.toml ${D}${sysconfdir}/chirpstack-concentratord/*.toml \
         ${D}${sysconfdir}/chirpstack-mqtt-forwarder/*.toml
+    # Region and channel plan straight from Concentratord's examples (installed by chirpstack-concentratord)
+    ln -sf examples/region_${LORAWAN_REGION_ID}.toml ${D}${sysconfdir}/chirpstack-concentratord/region.toml
+    ln -sf examples/channels_${LORAWAN_REGION_ID}.toml ${D}${sysconfdir}/chirpstack-concentratord/channels.toml
 
     install -d ${D}${libexecdir} ${D}${systemd_system_unitdir}
     install -m 0755 ${UNPACKDIR}/lorawan-secrets.sh ${D}${libexecdir}/lorawan-secrets
