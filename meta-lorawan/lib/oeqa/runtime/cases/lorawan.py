@@ -123,3 +123,16 @@ class LorawanGatewayTest(OERuntimeTestCase):
         for path in ("concentratord.toml", "region.toml", "channels.toml"):
             status, output = self.target.run("test -s /etc/chirpstack-concentratord/%s" % path)
             self.assertEqual(status, 0, msg="missing or empty: %s" % path)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_watchdog_configured(self):
+        # QEMU has no watchdog device; check that systemd took the setting (on the board it also pets /dev/watchdog0).
+        status, output = self.target.run("systemctl show -p RuntimeWatchdogUSec --value")
+        self.assertEqual(output.strip(), "30s", msg=output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_logs_in_ram(self):
+        # SD card wear: /var/log is a tmpfs (oe-core's VOLATILE_LOG_DIR), so journald writes no persistent journal.
+        status, output = self.target.run(
+            "readlink -f /var/log | grep -q '^/var/volatile/' && grep -q ' /var/volatile tmpfs ' /proc/mounts")
+        self.assertEqual(status, 0, msg=self.target.run("ls -ld /var/log; grep volatile /proc/mounts")[1])

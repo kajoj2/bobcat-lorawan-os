@@ -21,7 +21,9 @@ A failing test fails the build. Results: `build/tmp/log/oeqa/`, the boot log in
 - ChirpStack created its SQLite database and serves the web interface on port 8080;
 - a client is connected to Mosquitto, and a publish/subscribe round trip works;
 - Mosquitto and Redis listen on localhost only;
-- the key-only SSH policy is installed, and Concentratord's configuration and region files are in place.
+- the key-only SSH policy is installed, and Concentratord's configuration and region files are in place;
+- systemd runs the hardware watchdog (30 s; QEMU has no device, so only the setting is checked);
+- `/var/log` is in RAM (no journal written to the SD card).
 
 ## Differences from the board image
 
