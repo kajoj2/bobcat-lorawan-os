@@ -67,8 +67,9 @@ class LorawanGatewayTest(OERuntimeTestCase):
         self.assertEqual(status, 0, msg=output)
         mode, size = output.split()
         self.assertEqual(mode, "600")
-        self.assertGreater(int(size), len("CHIRPSTACK_API_SECRET=") + 40)
-        status, output = self.target.run("grep -c '^CHIRPSTACK_API_SECRET=.\\{40,\\}$' /var/lib/lorawan-secrets/chirpstack.env")
+        # 32 random bytes in hex, one line.
+        self.assertEqual(int(size), len("CHIRPSTACK_API_SECRET=") + 64 + 1)
+        status, output = self.target.run("grep -c '^CHIRPSTACK_API_SECRET=[0-9a-f]\\{64\\}$' /var/lib/lorawan-secrets/chirpstack.env")
         self.assertEqual(output.strip(), "1")
 
     @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
@@ -92,7 +93,7 @@ class LorawanGatewayTest(OERuntimeTestCase):
 
     @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
     def test_mqtt_roundtrip(self):
-        cmd = ("timeout 30 mosquitto_sub -h 127.0.0.1 -t lorawan-test/ping -C 1 & sleep 3; "
+        cmd = ("mosquitto_sub -h 127.0.0.1 -t lorawan-test/ping -C 1 -W 30 & sleep 3; "
                "mosquitto_pub -h 127.0.0.1 -t lorawan-test/ping -m pong; wait")
         status, output = self.target.run(cmd)
         self.assertIn("pong", output)
@@ -100,14 +101,22 @@ class LorawanGatewayTest(OERuntimeTestCase):
     @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
     def test_brokers_local_only(self):
         # Mosquitto (1883) and Redis (6379) must not listen on other addresses than loopback.
-        # busybox netstat or iproute2 ss; the local address is the fourth column in both.
-        status, output = self.target.run("netstat -ltn 2>/dev/null || ss -Hltn")
+        # No netstat/ss in the image: read the kernel's socket tables. State 0A is LISTEN; addresses are hex.
+        status, output = self.target.run("cat /proc/net/tcp /proc/net/tcp6")
         self.assertEqual(status, 0, msg=output)
+        loopback = {"0100007F", "00000000000000000000000001000000"}
+        ports = {0x075B: "Mosquitto (1883)", 0x18EB: "Redis (6379)"}
+        seen = set()
         for line in output.splitlines():
             fields = line.split()
-            if len(fields) < 4 or not fields[3].endswith((":1883", ":6379")):
+            if len(fields) < 4 or fields[3] != "0A" or ":" not in fields[1]:
                 continue
-            self.assertRegex(fields[3], r"^(127\.0\.0\.1|\[?::1\]?):", msg="listens beyond localhost: %s" % line)
+            addr, port = fields[1].split(":")
+            port = int(port, 16)
+            if port in ports:
+                seen.add(port)
+                self.assertIn(addr, loopback, msg="%s listens beyond localhost (%s)" % (ports[port], addr))
+        self.assertEqual(seen, set(ports), msg="not listening: %s" % [ports[p] for p in set(ports) - seen])
 
     @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
     def test_sshd_board_policy(self):
