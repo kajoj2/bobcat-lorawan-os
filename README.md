@@ -70,11 +70,14 @@ kas build kas/bobcat-g285.yml:my-keys.yml
 
 Details: [docs/building.md](docs/building.md). Flashing and first boot: [docs/flashing.md](docs/flashing.md).
 
+Without a board, `kas build kas/qemuarm64.yml` builds the same image for QEMU and runs the gateway's runtime
+tests in it (everything but the radio): [docs/testing.md](docs/testing.md).
+
 ## Repository layout
 
 | Path | What |
 |---|---|
-| `kas/` | Build configuration (`bobcat-g285.yml`) and the pinned revisions of every layer (`*.lock.yml`) |
+| `kas/` | Build configuration (`bobcat-g285.yml`, `qemuarm64.yml` for tests in QEMU) and the pinned revisions of every layer (`*.lock.yml`) |
 | `meta-bobcat/` | Board support: machine, device tree, kernel config |
 | `meta-lorawan/` | Board-independent gateway: distro, ChirpStack stack, image, configuration |
 | `docs/` | Hardware notes, architecture, decisions, bring-up checklist |

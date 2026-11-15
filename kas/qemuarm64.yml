@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+# SPDX-License-Identifier: MIT
+#
+# The same gateway image on QEMU (qemuarm64), with Yocto's runtime tests run right after the image is built:
+#
+#   kas build kas/qemuarm64.yml            (or kas-container build ...)
+#
+# There is no concentrator in QEMU, so chirpstack-concentratord fails and keeps restarting; everything else (systemd
+# units, first-boot secrets, Mosquitto, Redis, ChirpStack with its web interface, the MQTT Forwarder, SSH) runs as on
+# the board. The tests are in meta-lorawan/lib/oeqa/runtime/cases/lorawan.py; docs/testing.md has the details.
+# A failing test fails the build. Run the image by hand: `kas shell kas/qemuarm64.yml -c 'runqemu nographic slirp'`.
+header:
+  version: 14
+  includes:
+    - kas/bobcat-g285.yml
+    # Same layer revisions as the board build (kas only applies the lock next to the file named on the command line).
+    - kas/bobcat-g285.lock.yml
+
+machine: qemuarm64
+
+local_conf_header:
+  qemu: |
+    # Any SX1302 model Concentratord knows; there is no concentrator to talk to anyway.
+    LORAWAN_CONCENTRATOR_MODEL = "rak_2287"
+    # The board's RAM and core count. Arm64 on an x86 host runs without KVM, so boot takes a few minutes.
+    QB_MEM = "-m 2048"
+    QB_SMP = "-smp 4"
+    # Root over SSH with the empty password, for the test harness only (recipe refuses non-QEMU machines).
+    IMAGE_INSTALL:append = " lorawan-test-access"
+    IMAGE_CLASSES += "testimage"
+    TESTIMAGE_AUTO = "1"
+    TEST_SUITES = "ping ssh lorawan"
+    TEST_RUNQEMUPARAMS = "slirp nographic"
+    TEST_QEMUBOOT_TIMEOUT = "1800"

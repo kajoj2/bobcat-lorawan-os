@@ -11,5 +11,7 @@ First version, written before the first board arrived. Builds; not booted yet.
 - `lorawan-os` distro and `lorawan-gateway-image`: ChirpStack 4.20 (SQLite), Concentratord 4.7.1 with a
   `bobcat_miner300_g285` model, MQTT Forwarder 4.6.1, Mosquitto, Redis.
 - First-boot secret generation, key-only SSH, DHCP on Ethernet.
+- `kas/qemuarm64.yml`: the image on QEMU with runtime tests (`testimage`) of the gateway stack, run after each
+  build; `lorawan-test-access` (QEMU only) lets the test harness log in.
 - Build fixes from the first full build: wrynose variable rename, linux-yocto `COMPATIBLE_MACHINE`, debug prefix
   map for C code vendored by crates (`buildpaths` QA), Yocto-side stripping of the MQTT Forwarder.
