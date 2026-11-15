@@ -25,7 +25,9 @@ local_conf_header:
     # The board's RAM and core count. Arm64 on an x86 host runs without KVM, so boot takes a few minutes.
     QB_MEM = "-m 2048"
     QB_SMP = "-smp 4"
-    # Root over SSH with the empty password, for the test harness only (recipe refuses non-QEMU machines).
+    # Root over SSH with the empty password, for the test harness only. testimage insists on the two image
+    # features (they edit sshd_config); lorawan-test-access (QEMU machines only) overrides the key-only drop-in.
+    EXTRA_IMAGE_FEATURES += "allow-empty-password allow-root-login"
     IMAGE_INSTALL:append = " lorawan-test-access"
     IMAGE_CLASSES += "testimage"
     TESTIMAGE_AUTO = "1"
