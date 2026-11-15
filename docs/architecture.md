@@ -48,13 +48,16 @@ Short records; newest last. Each says what was chosen and why, so a later change
    Mosquitto and Redis on localhost, root without a password only on the local consoles.
 8. **Licensing**: MIT for the layers and scripts, `GPL-2.0-or-later OR MIT` for the device tree (kernel
    convention, upstreamable). REUSE-compliant headers. Only facts are taken from sources without a license.
+9. **Hardware watchdog through systemd** (`RuntimeWatchdogSec=30s`): an unattended gateway reboots itself when
+   the kernel or PID 1 hangs. RK3566's `dw_wdt` is in the kernel config and enabled in the SoC device tree.
 
 ## Open questions
 
 - Does the factory eMMC loader start our mainline U-Boot from the SD card? (first boot)
 - YT8512B warm-reboot link problem: still there with the PHY reset in the device tree? If yes, kernel fix
   (`PHY_RST_AFTER_CLK_EN`) or a oneshot service.
-- SD card wear: volatile journald and `noatime` by default? Read-only root with an overlay?
+- SD card wear: logs are already in RAM (oe-core's volatile `/var/log`) and ext4 mounts with `relatime`. Left:
+  a separate data partition, read-only root with an overlay?
 - Updates: whole-image A/B (RAUC, `meta-rockchip` has a demo) or package feed?
 - ChirpStack web interface build needs the network (pnpm); make it offline (vendored store or Yocto's npm fetcher).
 - A first-boot way to set the ChirpStack admin password and open MQTT to the LAN with credentials.
