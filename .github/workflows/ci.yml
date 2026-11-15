@@ -31,9 +31,10 @@ jobs:
           shellcheck tools/*.sh $(git ls-files '*.sh')
 
       - name: Python tools
-        run: python3 -m py_compile tools/*.py
+        run: python3 -m py_compile tools/*.py meta-lorawan/lib/oeqa/runtime/cases/*.py
 
       - name: kas files parse
         run: |
           pipx install kas
           kas dump kas/bobcat-g285.yml > /dev/null
+          kas dump kas/qemuarm64.yml > /dev/null
