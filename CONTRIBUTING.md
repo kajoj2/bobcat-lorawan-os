@@ -23,8 +23,10 @@ G285.
 - One topic per pull request; explain what you tested and on which board revision.
 - Every commit carries a `Signed-off-by:` line (`git commit -s`), certifying the
   [Developer Certificate of Origin](https://developercertificate.org/).
+<!-- REUSE-IgnoreStart -->
 - New files start with an SPDX header (`SPDX-License-Identifier: MIT`; device trees
   `(GPL-2.0-or-later OR MIT)`). CI runs `reuse lint`.
+<!-- REUSE-IgnoreEnd -->
 - Device tree changes: run `tools/check-dts.sh` (CI does too).
 - Shell scripts: POSIX sh, `shellcheck` clean.
 
