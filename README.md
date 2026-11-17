@@ -77,7 +77,7 @@ tests in it (everything but the radio): [docs/testing.md](docs/testing.md).
 
 | Path | What |
 |---|---|
-| `kas/` | Build configuration (`bobcat-g285.yml`, `qemuarm64.yml` for tests in QEMU) and the pinned revisions of every layer (`*.lock.yml`) |
+| `kas/` | Build configuration (`bobcat-g285.yml`, `qemuarm64.yml` for tests in QEMU, `debug-tools.yml` adds bring-up tools) and the pinned revisions of every layer (`*.lock.yml`) |
 | `meta-bobcat/` | Board support: machine, device tree, kernel config |
 | `meta-lorawan/` | Board-independent gateway: distro, ChirpStack stack, image, configuration |
 | `docs/` | Hardware notes, architecture, decisions, bring-up checklist |

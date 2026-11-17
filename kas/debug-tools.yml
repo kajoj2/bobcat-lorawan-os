@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+# SPDX-License-Identifier: MIT
+#
+# Adds bring-up and diagnostic tools (packagegroup-lorawan-debug) to the image. Not for production images:
+#
+#   kas build kas/bobcat-g285.yml:kas/debug-tools.yml
+header:
+  version: 14
+
+local_conf_header:
+  lorawan-debug-tools: |
+    LORAWAN_DEBUG_TOOLS = "1"

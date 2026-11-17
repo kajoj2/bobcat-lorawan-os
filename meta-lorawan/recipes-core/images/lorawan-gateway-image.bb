@@ -30,6 +30,10 @@ IMAGE_INSTALL += " \
     nano \
     zstd \
 "
+# Bring-up and diagnostic tools, off by default: LORAWAN_DEBUG_TOOLS = "1" (or kas/debug-tools.yml)
+LORAWAN_DEBUG_TOOLS ??= "0"
+IMAGE_INSTALL += "${@oe.utils.conditional('LORAWAN_DEBUG_TOOLS', '1', 'packagegroup-lorawan-debug', '', d)}"
+
 # zstd: multi-threaded compression (zstd -T0) for disk images, e.g. backing up the factory eMMC over the network:
 # busybox gzip uses one core and limits such a backup to ~8 MB/s on the RK3566.
 
