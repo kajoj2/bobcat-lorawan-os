@@ -10,6 +10,7 @@ COMPATIBLE_MACHINE:bobcat = "bobcat"
 SRC_URI:append:bobcat = " \
     file://dts/rk3566-bobcat-g285.dts \
     file://bobcat.cfg \
+    file://patches/0001-net-phy-motorcomm-add-YT8512-and-YT8512B.patch \
 "
 
 # Put the board DTS into the kernel tree next to the other Rockchip boards and list it in the Makefile, so the

@@ -9,3 +9,10 @@ path = "**"
 precedence = "closest"
 SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
 SPDX-License-Identifier = "MIT"
+
+# Linux kernel patches are derived from GPL-2.0+ kernel code.
+[[annotations]]
+path = "meta-bobcat/recipes-kernel/linux/files/patches/*.patch"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
+SPDX-License-Identifier = "GPL-2.0-or-later"

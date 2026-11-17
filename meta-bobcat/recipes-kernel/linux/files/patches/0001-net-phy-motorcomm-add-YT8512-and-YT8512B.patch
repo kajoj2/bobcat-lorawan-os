@@ -1,0 +1,105 @@
+Subject: [PATCH] net: phy: motorcomm: add YT8512 and YT8512B
+
+The Bobcat Miner 300 (G285) has a Motorcomm YT8512B (PHY ID 0x00000128) on
+RMII, with the 50 MHz reference clock driven by the RK3566. Mainline does not
+know this PHY, so the generic driver takes it and the link never comes up: the
+PHY stays in its strapped clock mode.
+
+Set the PLL reference to the REF_CLK pin, enable RMII, reset the PHY and turn
+off its automatic sleep, as the Motorcomm driver in Rockchip's BSP kernel does
+(drivers/net/phy/motorcomm.c there, GPL-2.0+).
+
+Upstream-Status: Pending
+---
+--- a/drivers/net/phy/motorcomm.c
++++ b/drivers/net/phy/motorcomm.c
+@@ -13,6 +13,8 @@
+ #include <linux/property.h>
+ 
+ #define PHY_ID_YT8511		0x0000010a
++#define PHY_ID_YT8512		0x00000118
++#define PHY_ID_YT8512B		0x00000128
+ #define PHY_ID_YT8521		0x0000011a
+ #define PHY_ID_YT8531		0x4f51e91b
+ #define PHY_ID_YT8531S		0x4f51e91a
+@@ -3006,7 +3008,50 @@
+ 
+ 	return yt8821_modify_utp_fiber_bmcr(phydev, BMCR_PDOWN, 0);
+ }
++
++/*
++ * YT8512/YT8512B, 10/100 PHYs. Register values from the Motorcomm driver in
++ * Rockchip's BSP kernel (drivers/net/phy/motorcomm.c, GPL-2.0+).
++ */
++#define YT8512_EXT_AFE_PLL		0x50
++#define YT8512_PLL_REFCLK_SEL_EN	BIT(6)
++#define YT8512_EXT_EXTEND_COMBO		0x4000
++#define YT8512_RMII_EN			BIT(0)
++#define YT8512_EXT_SLEEP_CONTROL1	0x2027
++#define YT8512_EN_SLEEP_SW		BIT(15)
++
++static int yt8512_config_init(struct phy_device *phydev)
++{
++	int ret;
+ 
++	/*
++	 * RMII with the 50 MHz reference clock coming from the MAC (as on the
++	 * boards this was written for): take the PLL reference from the
++	 * REF_CLK pin and switch the MII interface to RMII, then reset the PHY
++	 * so the new mode takes effect.
++	 */
++	if (phydev->interface == PHY_INTERFACE_MODE_RMII) {
++		ret = ytphy_modify_ext_with_lock(phydev, YT8512_EXT_AFE_PLL, 0,
++						 YT8512_PLL_REFCLK_SEL_EN);
++		if (ret < 0)
++			return ret;
++
++		ret = ytphy_modify_ext_with_lock(phydev,
++						 YT8512_EXT_EXTEND_COMBO, 0,
++						 YT8512_RMII_EN);
++		if (ret < 0)
++			return ret;
++
++		ret = genphy_soft_reset(phydev);
++		if (ret < 0)
++			return ret;
++	}
++
++	/* No automatic sleep while the cable is unplugged */
++	return ytphy_modify_ext_with_lock(phydev, YT8512_EXT_SLEEP_CONTROL1,
++					  YT8512_EN_SLEEP_SW, 0);
++}
++
+ static struct phy_driver motorcomm_phy_drvs[] = {
+ 	{
+ 		PHY_ID_MATCH_EXACT(PHY_ID_YT8511),
+@@ -3018,6 +3063,20 @@
+ 		.write_page	= yt8511_write_page,
+ 	},
+ 	{
++		PHY_ID_MATCH_EXACT(PHY_ID_YT8512),
++		.name		= "YT8512 Ethernet",
++		.config_init	= yt8512_config_init,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++	},
++	{
++		PHY_ID_MATCH_EXACT(PHY_ID_YT8512B),
++		.name		= "YT8512B Ethernet",
++		.config_init	= yt8512_config_init,
++		.suspend	= genphy_suspend,
++		.resume		= genphy_resume,
++	},
++	{
+ 		PHY_ID_MATCH_EXACT(PHY_ID_YT8521),
+ 		.name		= "YT8521 Gigabit Ethernet",
+ 		.get_features	= yt8521_get_features,
+@@ -3093,6 +3152,8 @@
+ 
+ static const struct mdio_device_id __maybe_unused motorcomm_tbl[] = {
+ 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8511) },
++	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8512) },
++	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8512B) },
+ 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8521) },
+ 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8531) },
+ 	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8531S) },
