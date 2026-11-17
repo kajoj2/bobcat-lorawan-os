@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 SUMMARY = "Configuration that turns the services into one LoRaWAN gateway"
 DESCRIPTION = "Concentratord board/region configuration, MQTT Forwarder and ChirpStack configuration, first-boot \
-secret generation, wired networking over DHCP, key-only SSH and the hardware watchdog."
+secret generation, wired and Wi-Fi networking over DHCP, key-only SSH and the hardware watchdog."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
@@ -14,6 +14,8 @@ SRC_URI = " \
     file://lorawan-secrets.sh \
     file://lorawan-secrets.service \
     file://80-wired.network \
+    file://80-wireless.network \
+    file://10-lorawan-wpa-supplicant.conf \
     file://50-lorawan-sshd.conf \
     file://10-lorawan-watchdog.conf \
 "
@@ -54,8 +56,16 @@ do_install() {
     install -m 0644 ${UNPACKDIR}/lorawan-secrets.service ${D}${systemd_system_unitdir}/
 
     install -d ${D}${sysconfdir}/systemd/network ${D}${sysconfdir}/ssh/sshd_config.d
-    install -m 0644 ${UNPACKDIR}/80-wired.network ${D}${sysconfdir}/systemd/network/
+    install -m 0644 ${UNPACKDIR}/80-wired.network ${UNPACKDIR}/80-wireless.network ${D}${sysconfdir}/systemd/network/
     install -m 0644 ${UNPACKDIR}/50-lorawan-sshd.conf ${D}${sysconfdir}/ssh/sshd_config.d/
+
+    # Wi-Fi: wpa_supplicant@wlan0 enabled, started only when its configuration exists
+    if ${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'true', 'false', d)}; then
+        install -d ${D}${systemd_system_unitdir}/wpa_supplicant@.service.d ${D}${sysconfdir}/systemd/system/multi-user.target.wants
+        install -m 0644 ${UNPACKDIR}/10-lorawan-wpa-supplicant.conf ${D}${systemd_system_unitdir}/wpa_supplicant@.service.d/
+        ln -sf ${systemd_system_unitdir}/wpa_supplicant@.service \
+            ${D}${sysconfdir}/systemd/system/multi-user.target.wants/wpa_supplicant@wlan0.service
+    fi
 
     install -d ${D}${systemd_unitdir}/system.conf.d
     install -m 0644 ${UNPACKDIR}/10-lorawan-watchdog.conf ${D}${systemd_unitdir}/system.conf.d/
@@ -70,3 +80,4 @@ CONFFILES:${PN} = " \
     ${sysconfdir}/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml \
 "
 RDEPENDS:${PN} = "chirpstack chirpstack-concentratord chirpstack-mqtt-forwarder"
+RRECOMMENDS:${PN} = "${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'wpa-supplicant', '', d)}"

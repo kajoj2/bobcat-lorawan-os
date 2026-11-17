@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Any Wi-Fi interface: DHCP (IPv4 and IPv6) once wpa_supplicant has joined a network. Wi-Fi is configured per
+# device after flashing (docs/flashing.md, "Wi-Fi"): /etc/wpa_supplicant/wpa_supplicant-wlan0.conf is never part of the image.
+[Match]
+Type=wlan
+
+[Network]
+DHCP=yes
+LinkLocalAddressing=yes
+
+[DHCPv4]
+UseDomains=yes
