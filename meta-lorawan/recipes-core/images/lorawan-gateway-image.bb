@@ -28,7 +28,10 @@ IMAGE_INSTALL += " \
     ethtool \
     htop \
     nano \
+    zstd \
 "
+# zstd: multi-threaded compression (zstd -T0) for disk images, e.g. backing up the factory eMMC over the network:
+# busybox gzip uses one core and limits such a backup to ~8 MB/s on the RK3566.
 
 # Redis and Mosquitto keep their packaged defaults: both listen on localhost only.
 

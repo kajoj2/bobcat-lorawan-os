@@ -29,7 +29,7 @@ You need `rkdeveloptool`, a micro-USB data cable to the rear port, and the seria
 2. Keep the area you are about to clear (and everything before the first partition):
    `rkdeveloptool rl 0 32768 emmc-first-16MiB.img`
    (In this mode the factory loader only returns real data for the first 32 MiB of the eMMC; a full backup of the
-   eMMC is easier from the running gateway: `ssh root@<gateway> 'dd if=/dev/mmcblk0 bs=4M | gzip -1' > emmc.img.gz`.)
+   eMMC is easier from the running gateway: `ssh root@<gateway> 'dd if=/dev/mmcblk0 bs=4M | zstd -T0' > emmc.img.zst`.)
 3. Clear the loader area: `head -c 8355840 /dev/zero > zero.bin && rkdeveloptool wl 64 zero.bin`.
 4. Power off, insert the card, power on: the serial console shows `U-Boot SPL 2026.01 ... Trying to boot from MMC2`.
 
