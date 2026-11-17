@@ -34,6 +34,25 @@
 		stdout-path = "serial2:1500000n8";
 	};
 
+	/*
+	 * The button on SARADC channel 0, as in the factory DTB (a "menu" key
+	 * there, pressed at about 0.98 V). Presumably the RECOVERY button, which
+	 * Rockchip boards wire to this channel; not checked yet.
+	 */
+	adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 0>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		poll-interval = <100>;
+
+		button-menu {
+			label = "menu";
+			linux,code = <KEY_MENU>;
+			press-threshold-microvolt = <980000>;
+		};
+	};
+
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
@@ -156,6 +175,11 @@
 
 &cpu3 {
 	cpu-supply = <&vdd_cpu>;
+};
+
+/* No display on this board */
+&display_subsystem {
+	status = "disabled";
 };
 
 /*
@@ -536,6 +560,11 @@
 	vccio5-supply = <&vcc_3v3>;
 	vccio6-supply = <&vcc_3v3>;
 	vccio7-supply = <&vcc_3v3>;
+	status = "okay";
+};
+
+/* Hardware TRNG, entropy for the first boot's keys */
+&rng {
 	status = "okay";
 };
 
