@@ -15,13 +15,49 @@ bmaptool copy lorawan-gateway-image-bobcat-g285.rootfs.wic.xz /dev/sdX
 xz -dc lorawan-gateway-image-bobcat-g285.rootfs.wic.xz | sudo dd of=/dev/rdiskN bs=4m
 ```
 
+## Make the board boot from the card (once)
+
+The factory loader on the eMMC tries the SD card first but cannot start ours (its SPL runs out of memory reading
+the card's partition table, seen on a G285). The boot ROM only moves on to the card when the eMMC has no valid
+loader, so the loader area of the eMMC (sectors 64 to 16383, before the first partition) has to be cleared once.
+The factory partitions stay as they are.
+
+You need `rkdeveloptool`, a micro-USB data cable to the rear port, and the serial console is useful.
+
+1. Hold the RECOVERY button on the board while connecting the 12 V supply, release after ~5 s. The board shows up
+   on USB as `2207:350a` and `rkdeveloptool ld` reports `Loader`.
+2. Keep the area you are about to clear (and everything before the first partition):
+   `rkdeveloptool rl 0 32768 emmc-first-16MiB.img`
+   (In this mode the factory loader only returns real data for the first 32 MiB of the eMMC; a full backup of the
+   eMMC is easier from the running gateway: `ssh root@<gateway> 'dd if=/dev/mmcblk0 bs=4M | gzip -1' > emmc.img.gz`.)
+3. Clear the loader area: `head -c 8355840 /dev/zero > zero.bin && rkdeveloptool wl 64 zero.bin`.
+4. Power off, insert the card, power on: the serial console shows `U-Boot SPL 2026.01 ... Trying to boot from MMC2`.
+
+Without a card the board now starts in Maskrom mode. Back to the factory firmware: in Maskrom, load a USB loader
+built from Rockchip's rkbin (`boot_merger RKBOOT/RK3566MINIALL.ini`, then `rkdeveloptool db rk356x_loader_*.bin`)
+and write the saved area back: `rkdeveloptool wl 0 emmc-first-16MiB.img`.
+
 ## Boot
 
-1. Unplug the Bobcat, open it, insert the card into the microSD slot on the board.
+1. Insert the card into the microSD slot on the board.
 2. Connect Ethernet, then the 12 V supply.
 3. The gateway gets an address over DHCP and announces itself as `bobcat-g285.local`.
 
-The eMMC is never written. To go back to the factory firmware, power off and remove the card.
+## Wi-Fi
+
+Wi-Fi is not configured in the image. On the gateway (over Ethernet or the serial console):
+
+```sh
+mkdir -p /etc/wpa_supplicant
+read -r SSID; read -rs PSK    # type the network name, then the passphrase (not echoed)
+wpa_passphrase "$SSID" "$PSK" | sed '/#psk/d' > /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf; unset SSID PSK
+systemctl restart wpa_supplicant@wlan0
+```
+
+`wlan0` then gets an address over DHCP. The module's calibration file and Bluetooth firmware are fetched at build
+time from a public copy of Rockchip's rkwifibt package (`bobcat-wifibt-firmware`); the module driver runs with
+`feature_disable=0x82000`, without which it never completes the WPA handshake with WPA2/WPA3 access points.
 
 ## Log in
 
