@@ -53,7 +53,14 @@ Short records; newest last. Each says what was chosen and why, so a later change
 
 ## Open questions
 
-- Does the factory eMMC loader start our mainline U-Boot from the SD card? (first boot)
+- Answered on the first boot (2026-11-17): the factory eMMC loader does not start ours from the card; the eMMC's
+  loader area is cleared once instead (docs/flashing.md).
+- Boot chain: SPL and U-Boot are built from mainline, the DDR init (TPL) and BL31 are rkbin blobs. Replace BL31
+  with upstream TF-A if its RK3566/RK3568 support is complete enough, which leaves the DDR blob as the only closed
+  part (there is no open DDR init for RK356x).
+- A U-Boot configuration for the board itself instead of `generic-rk3568_defconfig`: Ethernet (network boot),
+  LEDs during boot, the SARADC button.
+- Gadget mode on the micro-USB port (`dwc3: failed to enable ep0out`).
 - YT8512B warm-reboot link problem: still there with the PHY reset in the device tree? If yes, kernel fix
   (`PHY_RST_AFTER_CLK_EN`) or a oneshot service.
 - SD card wear: logs are already in RAM (oe-core's volatile `/var/log`) and ext4 mounts with `relatime`. Left:
