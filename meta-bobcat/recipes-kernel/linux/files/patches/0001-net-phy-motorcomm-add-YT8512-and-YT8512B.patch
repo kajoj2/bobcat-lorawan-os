@@ -2,12 +2,18 @@ Subject: [PATCH] net: phy: motorcomm: add YT8512 and YT8512B
 
 The Bobcat Miner 300 (G285) has a Motorcomm YT8512B (PHY ID 0x00000128) on
 RMII, with the 50 MHz reference clock driven by the RK3566. Mainline does not
-know this PHY, so the generic driver takes it and the link never comes up: the
-PHY stays in its strapped clock mode.
+know this PHY, so the generic driver takes it and the link never comes up.
 
 Set the PLL reference to the REF_CLK pin, enable RMII, reset the PHY and turn
 off its automatic sleep, as the Motorcomm driver in Rockchip's BSP kernel does
 (drivers/net/phy/motorcomm.c there, GPL-2.0+).
+
+That alone was not enough on the board: the PHY leaves reset advertising
+Extended Next Page (bit 12 of MII_ADVERTISE) and phylib keeps the bit.
+Against a switch that offers next pages too, autonegotiation stalls: the
+partner's base page arrives, autonegotiation never completes. Forced 10 and
+100 Mbit/s linked; clearing the bit gives 100 Mbit/s full duplex through
+autonegotiation.
 
 Upstream-Status: Pending
 ---
@@ -22,7 +28,7 @@ Upstream-Status: Pending
  #define PHY_ID_YT8521		0x0000011a
  #define PHY_ID_YT8531		0x4f51e91b
  #define PHY_ID_YT8531S		0x4f51e91a
-@@ -3006,7 +3008,50 @@
+@@ -3006,7 +3008,60 @@
  
  	return yt8821_modify_utp_fiber_bmcr(phydev, BMCR_PDOWN, 0);
  }
@@ -66,14 +72,24 @@ Upstream-Status: Pending
 +	}
 +
 +	/* No automatic sleep while the cable is unplugged */
-+	return ytphy_modify_ext_with_lock(phydev, YT8512_EXT_SLEEP_CONTROL1,
-+					  YT8512_EN_SLEEP_SW, 0);
++	ret = ytphy_modify_ext_with_lock(phydev, YT8512_EXT_SLEEP_CONTROL1,
++					 YT8512_EN_SLEEP_SW, 0);
++	if (ret < 0)
++		return ret;
++
++	/*
++	 * The PHY comes out of reset advertising Extended Next Page, which
++	 * genphy_config_advert() leaves set. Against a link partner that
++	 * offers next pages too (a switch with EEE), autonegotiation never
++	 * completes and the link stays down; without the bit it comes up.
++	 */
++	return phy_modify(phydev, MII_ADVERTISE, ADVERTISE_XNP, 0);
 +}
 +
  static struct phy_driver motorcomm_phy_drvs[] = {
  	{
  		PHY_ID_MATCH_EXACT(PHY_ID_YT8511),
-@@ -3018,6 +3063,20 @@
+@@ -3018,6 +3073,20 @@
  		.write_page	= yt8511_write_page,
  	},
  	{
@@ -94,7 +110,7 @@ Upstream-Status: Pending
  		PHY_ID_MATCH_EXACT(PHY_ID_YT8521),
  		.name		= "YT8521 Gigabit Ethernet",
  		.get_features	= yt8521_get_features,
-@@ -3093,6 +3152,8 @@
+@@ -3093,6 +3162,8 @@
  
  static const struct mdio_device_id __maybe_unused motorcomm_tbl[] = {
  	{ PHY_ID_MATCH_EXACT(PHY_ID_YT8511) },
