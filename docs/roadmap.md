@@ -4,6 +4,19 @@
 Features planned on top of the gateway, each with what it needs, the steps and the open points. Order is a
 suggestion: 7 and 5 make the gateway easier to use, 6 makes it last, 4 and 9 are for later.
 
+## Experimental: boot firmware (branch `experimental/boot-firmware`)
+
+Not on main and not tested on a board yet. The branch has three switchable changes to the boot chain, described
+with their tests in `docs/experimental-boot-firmware.md` on that branch:
+
+- U-Boot with the G285's own device tree: status LED from power-on, the button held at power-on shows the SD card
+  and eMMC as USB disks (write an image without taking the card out); groundwork for item 6.
+- BL31 built from upstream TF-A sources instead of Rockchip's blob.
+- LPDDR4X at 1332 MHz instead of the factory 1056 MHz: above what the board was set up for, only worth it for
+  memory-bound work, never the default without an overnight memory test.
+
+Each part moves to main on its own once it has passed its tests on a board; the DDR clock probably stays opt-in.
+
 ## 7. Front RGB LED and the board LEDs as status
 
 The board has four single LEDs (D3..D6 on GPIO0_D3..D6, in the device tree as status, power, LAN, Wi-Fi) and a
