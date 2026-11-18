@@ -10,19 +10,26 @@
 / {
 	options {
 		u-boot {
-			/* The status LED is on from U-Boot's start, so a board stuck before Linux shows it */
-			boot-led = <&{/leds/led-status}>;
+			/*
+			 * Red from U-Boot's start (as the factory firmware leaves it);
+			 * Linux turns it off and lets green heartbeat.
+			 */
+			boot-led = <&{/leds/led-red}>;
 		};
 	};
 };
 
-/* U-Boot looks LEDs and buttons up by label (`led status on`, `button menu`) */
-&{/leds/led-status} {
-	label = "status";
+/* U-Boot looks LEDs up by label (`led red on`) */
+&{/leds/led-red} {
+	label = "red";
 };
 
-&{/leds/led-power} {
-	label = "power";
+&{/leds/led-green} {
+	label = "green";
+};
+
+&{/leds/led-blue} {
+	label = "blue";
 };
 
 /* The micro USB port as a device: `ums` (USB mass storage) and `rockusb` */

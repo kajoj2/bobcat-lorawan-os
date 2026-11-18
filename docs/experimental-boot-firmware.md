@@ -2,8 +2,17 @@
 # Experimental: boot firmware
 
 **Status: experimental, on the branch `experimental/boot-firmware` only.** main keeps the boot chain that is known
-to work (generic U-Boot, Rockchip's BL31 blob, DDR at 1056 MHz). Nothing here is tested on a board until this page
-says so.
+to work (generic U-Boot, Rockchip's BL31 blob, DDR at 1056 MHz).
+
+First board test, 2026-11-18 (all three switches on, without a serial console):
+- boots from SD to Linux, Ethernet and Wi-Fi up, warm `reboot` comes back;
+- BL31 on the card is TF-A `v2.14.1(release)`; Linux sees PSCI 1.1, SMCCC 1.5 and all 4 cores; cpufreq lists
+  408..1800 MHz;
+- the DDR PHY clock under Linux is 666 MHz (`clk_ddr1x`, half the DDR clock): the memory runs at 1332 MHz;
+  `memtester 1200M 1` passed its first 13 tests (running);
+- U-Boot on the card is the board build (its device tree and the button command are in `u-boot.itb`);
+- not checked yet: the boot LED (that build pointed at LEDs the board does not have, fixed since), the button
+  and USB mass storage, `poweroff`, the overnight memory test.
 
 The RK3566 boot chain:
 
@@ -26,7 +35,8 @@ does not boot can be bisected by turning them back one at a time (in `local.conf
 
 - the board's device tree: U-Boot builds the same `rk3566-bobcat-g285.dts` as the kernel (`CONFIG_OF_UPSTREAM`),
   plus `rk3566-bobcat-g285-u-boot.dtsi`;
-- the status LED lit from U-Boot's start (`LED_BOOT`), so a board stuck before Linux can be told from a dead one;
+- the front RGB LED red from U-Boot's start (`LED_BOOT`), so a board stuck before Linux can be told from a dead one
+  (Linux then switches to the green heartbeat);
 - the button (SARADC, `adc-keys`): held at power-on, U-Boot shows the SD card and the eMMC as USB disks on the
   micro USB port (`ums 0 mmc 1,0`), so an image can be written from a computer without taking the card out or
   using Maskrom mode. Ctrl+C on the console ends it;
