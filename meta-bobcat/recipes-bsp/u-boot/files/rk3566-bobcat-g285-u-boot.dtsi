@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
+/*
+ * U-Boot additions to the board's Linux device tree (rk3566-bobcat-g285.dts,
+ * built by U-Boot from the same file). EXPERIMENTAL, see
+ * docs/experimental-boot-firmware.md.
+ */
+
+#include "rk356x-u-boot.dtsi"
+
+/ {
+	options {
+		u-boot {
+			/* The status LED is on from U-Boot's start, so a board stuck before Linux shows it */
+			boot-led = <&{/leds/led-status}>;
+		};
+	};
+};
+
+/* U-Boot looks LEDs and buttons up by label (`led status on`, `button menu`) */
+&{/leds/led-status} {
+	label = "status";
+};
+
+&{/leds/led-power} {
+	label = "power";
+};
+
+/* The micro USB port as a device: `ums` (USB mass storage) and `rockusb` */
+&usb_host0_xhci {
+	dr_mode = "peripheral";
+};
