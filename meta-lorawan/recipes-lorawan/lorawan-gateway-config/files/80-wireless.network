@@ -8,5 +8,10 @@ Type=wlan
 DHCP=yes
 LinkLocalAddressing=yes
 
+# Higher metric than the cable (80-wired.network), so Wi-Fi is the fallback when both are up.
 [DHCPv4]
 UseDomains=yes
+RouteMetric=600
+
+[IPv6AcceptRA]
+RouteMetric=600

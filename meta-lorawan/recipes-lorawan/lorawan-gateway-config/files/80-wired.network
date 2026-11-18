@@ -8,5 +8,10 @@ Name=en* eth* end*
 DHCP=yes
 LinkLocalAddressing=yes
 
+# Lower metric than Wi-Fi (80-wireless.network): with both up in one network, traffic takes the cable.
 [DHCPv4]
 UseDomains=yes
+RouteMetric=100
+
+[IPv6AcceptRA]
+RouteMetric=100
