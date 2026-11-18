@@ -94,8 +94,8 @@ the notes above, and the device tree was written from scratch.
 
 | | | |
 |---|---|---|
-| LEDs D3..D6 on GPIO0_D3..D6, active high (status, power, LAN, Wi-Fi) | V | [DD] §12 |
-| Front RGB LED on GPIO4_A0/A1/A2 (factory sets 0/0/1), not described yet | U | [DD] §12 |
+| No LEDs D3..D6 on GPIO0_D3..D6 as [DD] §12 has them: driving those lines lights nothing and the front RGB LED is the only LED on the board | V | [FACT] |
+| Front RGB LED: GPIO4_A0 green, GPIO4_A1 blue, GPIO4_A2 red, all active high (each line driven on its own, 2026-11-18); the factory firmware leaves it red (0/0/1) | V | [FACT] |
 | RTC HYM8563 at 0x51 on **i2c4**, CR1220 backed (the factory DTB enables it on both i2c2 and i2c4) | V | [FACT] |
 | Buttons: a "menu" key on SARADC channel 0 (pressed ~0.98 V) in the factory DTB; RESET and RECOVERY on the board | V (DTB), U (which button) | [DD] §12, [FACT] |
 | Hardware TRNG of the RK3568 family works under mainline (`rockchip-rng`) | U | [FACT] (enabled, to be checked) |

@@ -17,21 +17,19 @@ with their tests in `docs/experimental-boot-firmware.md` on that branch:
 
 Each part moves to main on its own once it has passed its tests on a board; the DDR clock probably stays opt-in.
 
-## 7. Front RGB LED and the board LEDs as status
+## 7. Front RGB LED as status
 
-The board has four single LEDs (D3..D6 on GPIO0_D3..D6, in the device tree as status, power, LAN, Wi-Fi) and a
-front RGB LED on GPIO4_A0/A1/A2 (the factory firmware sets 0/0/1 at boot; colour order and polarity unknown).
+The front RGB LED is the board's only LED: GPIO4_A0 green, GPIO4_A1 blue, GPIO4_A2 red, active high (checked on a
+board, docs/hardware-g285.md). In the device tree since 2026-11-18 as three `gpio-leds`, green with the `heartbeat`
+trigger; the single LEDs D3..D6 some notes describe are not on the G285.
 
 Steps:
-1. On a board: drive each line by hand (`gpioset`) and note which LED lights and in which colour; check that
-   D3..D6 match their names.
-2. Device tree: the RGB LED as three `gpio-leds` grouped into one multicolour LED (`leds-group-multicolor`), so
-   user space sets a colour through `/sys/class/leds/rgb:status/multi_intensity`.
-3. Kernel triggers where they fit: `netdev` on eth0 / wlan0 for the LAN and Wi-Fi LEDs (link + activity),
-   `heartbeat` stays on status.
-4. A small service for the RGB LED: blue while booting, green when the network and the concentrator are up,
+1. Device tree: group the three into one multicolour LED (`leds-group-multicolor`), so user space sets a colour
+   through `/sys/class/leds/rgb:status/multi_intensity`; the heartbeat then moves to the service below.
+2. A small service for the RGB LED: blue while booting, green when the network and the concentrator are up,
    red on a concentrator or ChirpStack failure, a short white flash per received uplink (from the MQTT
    Forwarder's events on the local broker). Shell + `mosquitto_sub`, no new dependencies.
+3. U-Boot (experimental branch): light the LED from power-on, so a board stuck before Linux shows it.
 
 Open: which states are worth a colour; brightness at night (an option to turn the RGB LED off).
 

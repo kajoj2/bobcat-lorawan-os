@@ -40,7 +40,8 @@ the pull request that confirms them, and move the fact to "V" in [hardware-g285.
       2026-11-18: checked through Concentratord instead (starts, reads the gateway EUI, receives frames).
 - [x] RTC: `i2cdetect -y 4` and `-y 2`: where is 0x51? Move the node if needed. `hwclock -r` works.
       2026-11-18: 0x51 on i2c4, bound by the driver; `hwclock -r` reads the time (in step with NTP).
-- [ ] LEDs: status heartbeats, power on.
+- [x] LEDs: status heartbeats, power on.
+      2026-11-18: the only LED is the front RGB one (GPIO4_A0 green, A1 blue, A2 red), lit line by line; in the device tree as green heartbeat (first in the image after dad3a90).
 - [x] Wi-Fi: `wlan0` appears; which NVRAM file does `brcmfmac` ask for?
       2026-11-18: `brcm/brcmfmac43430-sdio.bobcat,miner300-g285.txt`; joins a WPA2/WPA3 network with the image as built.
 - [x] Bluetooth: `hciconfig` / `bluetoothctl list`.

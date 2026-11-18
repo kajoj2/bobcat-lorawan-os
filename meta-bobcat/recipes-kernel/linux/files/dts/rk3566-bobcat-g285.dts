@@ -56,30 +56,33 @@
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
-		pinctrl-0 = <&led_pins>;
+		pinctrl-0 = <&rgb_led_pins>;
 
-		/* D3..D6, all active high (Armbian G285 DTS, gpio debugfs) */
-		led-status {
-			gpios = <&gpio0 RK_PD3 GPIO_ACTIVE_HIGH>;
+		/*
+		 * The front RGB LED, the board's only LED (checked by eye on a
+		 * G285 on 2026-11-18, each line driven on its own; all active
+		 * high). The factory firmware leaves it red. Under Linux: green
+		 * heartbeat, so a running system shows; red and blue are free for
+		 * user space (docs/roadmap.md, item 7).
+		 */
+		led-green {
+			gpios = <&gpio4 RK_PA0 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_GREEN>;
 			function = LED_FUNCTION_STATUS;
 			linux,default-trigger = "heartbeat";
 		};
 
-		led-power {
-			gpios = <&gpio0 RK_PD4 GPIO_ACTIVE_HIGH>;
-			function = LED_FUNCTION_POWER;
-			default-state = "on";
-		};
-
-		led-lan {
-			gpios = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
-			function = LED_FUNCTION_LAN;
+		led-blue {
+			gpios = <&gpio4 RK_PA1 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_STATUS;
 			default-state = "off";
 		};
 
-		led-wlan {
-			gpios = <&gpio0 RK_PD6 GPIO_ACTIVE_HIGH>;
-			function = LED_FUNCTION_WLAN;
+		led-red {
+			gpios = <&gpio4 RK_PA2 GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_RED>;
+			function = LED_FUNCTION_STATUS;
 			default-state = "off";
 		};
 	};
@@ -508,11 +511,10 @@
 	};
 
 	leds {
-		led_pins: led-pins {
-			rockchip,pins = <0 RK_PD3 RK_FUNC_GPIO &pcfg_pull_none>,
-					<0 RK_PD4 RK_FUNC_GPIO &pcfg_pull_none>,
-					<0 RK_PD5 RK_FUNC_GPIO &pcfg_pull_none>,
-					<0 RK_PD6 RK_FUNC_GPIO &pcfg_pull_none>;
+		rgb_led_pins: rgb-led-pins {
+			rockchip,pins = <4 RK_PA0 RK_FUNC_GPIO &pcfg_pull_none>,
+					<4 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none>,
+					<4 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 
