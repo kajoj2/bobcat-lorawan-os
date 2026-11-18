@@ -3,7 +3,8 @@
 
 [logging]
   level = "info"
-  log_to_syslog = true
+  # stderr, which systemd puts in the journal (journalctl -u chirpstack-mqtt-forwarder)
+  log_to_syslog = false
 
 [mqtt]
   topic_prefix = "@REGION_ID@"

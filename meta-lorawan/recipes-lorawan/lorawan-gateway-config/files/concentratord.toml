@@ -4,7 +4,8 @@
 
 [concentratord]
   log_level = "INFO"
-  log_to_syslog = true
+  # stderr, which systemd puts in the journal (journalctl -u chirpstack-concentratord)
+  log_to_syslog = false
   stats_interval = "30s"
 
   [concentratord.api]
