@@ -99,4 +99,4 @@ the notes above, and the device tree was written from scratch.
 | RTC HYM8563 at 0x51 on **i2c4**, CR1220 backed (the factory DTB enables it on both i2c2 and i2c4) | V | [FACT] |
 | Buttons: a "menu" key on SARADC channel 0 (pressed ~0.98 V) in the factory DTB; RESET and RECOVERY on the board | V (DTB), U (which button) | [DD] §12, [FACT] |
 | Hardware TRNG of the RK3568 family works under mainline (`rockchip-rng`) | U | [FACT] (enabled, to be checked) |
-| Microchip ATECC608 secure element (the Helium key), I2C bus not identified; unused by this project | U | [FACT] |
+| Microchip ATECC608 secure element (the Helium key) at 0x60 on **i2c2** (answers `i2cdetect -y 2`, 2026-11-18); unused by this project | V | [FACT] |
