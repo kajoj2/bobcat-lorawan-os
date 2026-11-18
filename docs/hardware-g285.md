@@ -25,6 +25,7 @@ the notes above, and the device tree was written from scratch.
 | | | |
 |---|---|---|
 | Serial number prefix `285` = G285 (G280: no Wi-Fi; G29x: different SPI bus) | U | [TTN] hostnames/compose files |
+| Made for Bobcat by Tiansi (G280/G285) and Tinionet (G290/G295), as the factory scripts tell the two apart | U | [FACT] (factory `lora.sh`) |
 | SoC RK3566, 2 GB RAM, 64 GB eMMC (`SLD64G`, HS200, 8 bit) | V | [DD] §4, [FACT] |
 | RAM: LPDDR4X, one rank, 32 bit; the factory DDR blob (V1.07) and rkbin's `rk3566_ddr_1056MHz` (v1.23) both run it at 1056 MHz | V | [FACT] |
 | No SPI NOR flash | V | [FACT] (SPL: `unrecognized JEDEC id bytes: 00, 00, 00`) |
@@ -75,10 +76,11 @@ the notes above, and the device tree was written from scratch.
 | GMAC1, RMII, SoC drives the 50 MHz reference clock (`clock_in_out = "output"`) | V | [DD] §5 |
 | PHY Motorcomm YT8512B (id 0x00000128) at MDIO address 0, reset GPIO4_C2 active low, 20 ms / 100 ms | V | [DD] §5, [FACT] |
 | The reset must be released before the MDIO bus is scanned (reset on the bus, not in the PHY node), or no PHY is found | V | [FACT] |
-| Mainline has no YT8512B driver: the generic PHY driver gets no link | V | [FACT] (patch in `linux-yocto`, not yet tested) |
+| Mainline has no YT8512B driver: the generic PHY driver gets no link. Our driver patch sets PLL/RMII and clears Extended Next Page in the advertisement (autonegotiation stalls with it against a switch that offers next pages); 100/Full and DHCP since 2026-11-18 | V | [FACT] |
 | GMAC1 pin group m0 (GPIO3_B1..B7, C0, C4, C5) | V | [NEBRA], [FACT] (factory DTB) |
 | MAC address: stable, U-Boot derives it from the SoC's serial number (`local-mac-address`) | V | [FACT] |
 | Autonegotiation may wedge after a warm reboot; a PHY soft reset or power cycle clears it | V (symptom), ? (cause) | [DD] §5 |
+| With the patched driver the link came back after a warm `reboot` (once so far) | V | [FACT] |
 
 ## Wi-Fi / Bluetooth
 
@@ -89,6 +91,8 @@ the notes above, and the device tree was written from scratch.
 | Bluetooth on UART1 (m0, with RTS/CTS), shutdown GPIO2_B7, device wake GPIO2_C1, **host wake GPIO0_B3** (GPIO2_C0 is UART1's CTS) | V | [DD] §6, [FACT] (factory DTB) |
 | NVRAM: the factory one is Rockchip rkwifibt's `nvram_azw372.txt` (identical bytes); linux-firmware's AP6212 file has a different TX power calibration | V | [FACT] |
 | WPA2/WPA3 transition access points: `brcmfmac` needs `feature_disable=0x82000`, or no EAPOL frame reaches wpa_supplicant | V | [FACT] |
+| Factory Wi-Fi driver: Cypress `cywdhd` (out of tree, kernel 4.19) with `fw_bcm43438a1.bin` 7.46.58 (r725848 CY, 2020-09); the factory module set also has Marvell `mwifiex_sdio`, so other units may carry a different module | V | [FACT] (factory rootfs, `modules.tar.gz`) |
+| Factory Bluetooth patch file `bcm43438a1.hcd` ("BCM4343A1 UART 26 MHz wlbga_eLG_lite BT 4.2"); rkwifibt's `BCM4343A1.hcd` (a different file of the same family) works | V | [FACT] |
 
 ## Other
 
@@ -96,7 +100,9 @@ the notes above, and the device tree was written from scratch.
 |---|---|---|
 | No LEDs D3..D6 on GPIO0_D3..D6 as [DD] §12 has them: driving those lines lights nothing and the front RGB LED is the only LED on the board | V | [FACT] |
 | Front RGB LED: GPIO4_A0 green, GPIO4_A1 blue, GPIO4_A2 red, all active high (each line driven on its own, 2026-11-18); the factory firmware leaves it red (0/0/1) | V | [FACT] |
+| The factory `diagnoser` (Go, UPX-packed) switches the RGB LED through sysfs GPIO 128/129/130 and names red, green, blue, yellow, cyan, magenta and white; it also has a second set on GPIO 44/45/47 (GPIO1_B4/B5/B7) for another variant | V | [FACT] (factory rootfs) |
 | RTC HYM8563 at 0x51 on **i2c4**, CR1220 backed (the factory DTB enables it on both i2c2 and i2c4) | V | [FACT] |
 | Buttons: a "menu" key on SARADC channel 0 (pressed ~0.98 V) in the factory DTB; RESET and RECOVERY on the board | V (DTB), U (which button) | [DD] §12, [FACT] |
-| Hardware TRNG of the RK3568 family works under mainline (`rockchip-rng`) | U | [FACT] (enabled, to be checked) |
+| Hardware TRNG of the RK3568 family works under mainline (`rockchip-rng`, `/dev/hwrng`) | V | [FACT] |
 | Microchip ATECC608 secure element (the Helium key) at 0x60 on **i2c2** (answers `i2cdetect -y 2`, 2026-11-18); unused by this project | V | [FACT] |
+| ATECC608 slots in use: **slot 0** = gateway key (`GW_KEYPAIR=ecc://i2c-N:96?slot=0`), **slot 15** = onboarding key (`GW_ONBOARDING=...slot=15`); the factory start script passes the chip's bus to the Helium container | V | [FACT] (factory `miner.sh`) |

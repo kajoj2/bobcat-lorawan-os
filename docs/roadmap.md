@@ -80,12 +80,11 @@ Open: A/B or not; which store, if any.
 
 Every Bobcat has a Microchip ATECC608 (the Helium key in one slot). Its private keys never leave the chip.
 
-Rules: read-only survey first; never write or lock the configuration zone, never touch the Helium slot, so the
-board can still go back to its factory use.
+Rules: read-only survey first; never write or lock the configuration zone, never touch the Helium slots (0: gateway
+key, 15: onboarding key, from the factory start script), so the board can still go back to its factory use.
 
 Steps:
-1. Find the chip: scan the I2C buses enabled in the device tree (address 0x60), and if it is not there, a test
-   device tree with the remaining buses (i2c1, i2c3, i2c5) enabled.
+1. Found on 2026-11-18: i2c2, address 0x60 (`i2cdetect -y 2`), the bus the factory firmware used.
 2. Read its configuration zone and lock state (cryptoauthlib's tools, read only): which slots exist, which allow
    key generation (`GenKey`) and signing.
 3. If a free slot allows it: generate a P-256 key in it, use it through cryptoauthlib's PKCS#11 module with
