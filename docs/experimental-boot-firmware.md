@@ -5,7 +5,7 @@
 to work (generic U-Boot, Rockchip's BL31 blob, DDR at 1056 MHz).
 
 First board test, 2026-11-18 (all three switches on, without a serial console):
-- boots from SD to Linux, Ethernet and Wi-Fi up, warm `reboot` comes back;
+- boots from SD to Linux, Ethernet up, warm `reboot` comes back (Wi-Fi: see the second test, it was not up);
 - BL31 on the card is TF-A `v2.14.1(release)`; Linux sees PSCI 1.1, SMCCC 1.5 and all 4 cores; cpufreq lists
   408..1800 MHz;
 - the DDR PHY clock under Linux is 666 MHz (`clk_ddr1x`, half the DDR clock): the memory runs at 1332 MHz;
@@ -13,6 +13,15 @@ First board test, 2026-11-18 (all three switches on, without a serial console):
 - U-Boot on the card is the board build (its device tree and the button command are in `u-boot.itb`);
 - not checked yet: the boot LED (that build pointed at LEDs the board does not have, fixed since), the button
   and USB mass storage, `poweroff`, the overnight memory test.
+
+Second test, 2026-11-19 (serial console, boot firmware swapped on the card one part at a time):
+- U-Boot/TF-A banners as expected: DDR 1332 MHz from the DDR blob, `BL31: v2.14.1(release)`, U-Boot 2026.01 with
+  the G285 device tree; Ethernet 100/Full with DHCP, also over warm reboots;
+- **Wi-Fi did not come up**: `mmc2: error -84 whilst initialising SDIO card` at 50 MHz on every boot. It came up
+  at 25 MHz (`max-frequency` in the DTB), with the generic U-Boot, and with the board U-Boot once U-Boot left the
+  SDIO bus alone (`&sdmmc1` disabled in `rk3566-bobcat-g285-u-boot.dtsi`), with TF-A from source and with the
+  rkbin BL31 alike. The DDR clock and the RK809 (registers and regulator voltages identical between a good and a
+  bad boot) were not the cause. U-Boot now leaves `sdmmc1` disabled.
 
 The RK3566 boot chain:
 
@@ -41,6 +50,7 @@ does not boot can be bisected by turning them back one at a time (in `local.conf
   micro USB port (`ums 0 mmc 1,0`), so an image can be written from a computer without taking the card out or
   using Maskrom mode. Ctrl+C on the console ends it;
 - the RK809 PMIC and its regulators, I2C, LED, button and regulator commands;
+- the Wi-Fi SDIO controller (`sdmmc1`) disabled: probing it from U-Boot breaks Wi-Fi in Linux (second test above);
 - no SPI flash support (the board has none).
 
 To test:
