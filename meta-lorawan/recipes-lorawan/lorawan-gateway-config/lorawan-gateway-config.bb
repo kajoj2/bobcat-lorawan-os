@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 SUMMARY = "Configuration that turns the services into one LoRaWAN gateway"
 DESCRIPTION = "Concentratord board/region configuration, MQTT Forwarder and ChirpStack configuration, first-boot \
-secret generation, wired and Wi-Fi networking over DHCP, key-only SSH and the hardware watchdog."
+secret generation, wired and Wi-Fi networking over DHCP (online when either is), key-only SSH and the hardware watchdog."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
@@ -18,6 +18,7 @@ SRC_URI = " \
     file://10-lorawan-wpa-supplicant.conf \
     file://50-lorawan-sshd.conf \
     file://10-lorawan-watchdog.conf \
+    file://10-lorawan-wait-online.conf \
 "
 
 # Set by the machine (board layer): the Concentratord model of the board's concentrator.
@@ -58,6 +59,8 @@ do_install() {
     install -d ${D}${sysconfdir}/systemd/network ${D}${sysconfdir}/ssh/sshd_config.d
     install -m 0644 ${UNPACKDIR}/80-wired.network ${UNPACKDIR}/80-wireless.network ${D}${sysconfdir}/systemd/network/
     install -m 0644 ${UNPACKDIR}/50-lorawan-sshd.conf ${D}${sysconfdir}/ssh/sshd_config.d/
+    install -d ${D}${systemd_system_unitdir}/systemd-networkd-wait-online.service.d
+    install -m 0644 ${UNPACKDIR}/10-lorawan-wait-online.conf ${D}${systemd_system_unitdir}/systemd-networkd-wait-online.service.d/
 
     # Wi-Fi: wpa_supplicant@wlan0 enabled, started only when its configuration exists
     if ${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'true', 'false', d)}; then
