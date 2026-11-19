@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+[package]
+name = "lorawan-agent"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Status web panel, diagnostics, LED status and ChirpStack registration for LoRaWAN Gateway OS"
+# No dependencies on purpose: the binary stays small, and the Yocto recipe needs no crate list.
+
+[dependencies]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

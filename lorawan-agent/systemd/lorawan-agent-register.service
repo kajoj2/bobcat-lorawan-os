@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MIT
+# First boot: add this gateway to the local ChirpStack (docs/lorawan-agent.md). Done once; delete
+# /var/lib/lorawan-agent/registered to run it again.
+[Unit]
+Description=Add this gateway to the local ChirpStack
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/lorawan-agent.md
+After=lorawan-secrets.service chirpstack.service chirpstack-mqtt-forwarder.service mosquitto.service
+Wants=chirpstack.service
+ConditionPathExists=!/var/lib/lorawan-agent/registered
+
+[Service]
+# Not oneshot: it retries for up to 30 minutes and must not hold back multi-user.target meanwhile.
+Type=exec
+ExecStart=/usr/bin/lorawan-agent register
+Restart=on-failure
+RestartSec=5min
+# As ChirpStack itself: its user owns the database `chirpstack create-api-key` writes to.
+User=chirpstack
+EnvironmentFile=/var/lib/lorawan-secrets/chirpstack.env
+StateDirectory=lorawan-agent
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

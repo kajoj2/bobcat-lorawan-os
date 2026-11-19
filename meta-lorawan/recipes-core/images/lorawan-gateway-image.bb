@@ -15,6 +15,7 @@ LORAWAN_SSH_AUTHORIZED_KEYS ??= ""
 IMAGE_INSTALL += " \
     packagegroup-core-boot \
     lorawan-gateway-config \
+    lorawan-agent \
     chirpstack \
     chirpstack-concentratord \
     chirpstack-mqtt-forwarder \

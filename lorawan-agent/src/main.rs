@@ -1,0 +1,208 @@
+// SPDX-License-Identifier: MIT
+//! lorawan-agent: the gateway's own status service.
+//!
+//!   lorawan-agent serve      web panel on port 80, LED status (lorawan-agent.service)
+//!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
+//!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
+//!   lorawan-agent led-reset  give the LED back to the device tree's default (green heartbeat)
+
+mod http;
+mod led;
+mod mqtt;
+mod pb;
+mod radio;
+mod register;
+mod status;
+mod sys;
+
+use http::Response;
+use radio::{now, Radio};
+use status::{health, Level, Status};
+use std::env;
+use std::process::ExitCode;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const INDEX: &str = include_str!("index.html");
+const DEFAULT_BROKER: &str = "127.0.0.1:1883";
+const DEFAULT_LISTEN: &str = "[::]:80";
+
+const USAGE: &str = "usage: lorawan-agent <serve|register|diag|led-reset> [options]
+  serve      [--listen ADDR:PORT] [--broker ADDR:PORT]     web panel and LED status
+  register   [--broker ADDR:PORT] [--api ADDR:PORT] [--chirpstack-config DIR] [--name NAME]
+             [--gateway-id EUI]  (another gateway; does not mark this one as registered)
+  diag       [--agent ADDR:PORT]                          status report (same as lorawan-diag)
+  led-reset                                               LED back to green heartbeat
+";
+
+fn opt(args: &[String], name: &str, default: &str) -> String {
+    args.windows(2)
+        .find(|w| w[0] == name)
+        .map(|w| w[1].clone())
+        .unwrap_or_else(|| default.to_string())
+}
+
+/// System snapshots run a few processes; the panel polls every few seconds, so keep one for a while.
+struct Cache {
+    at: Option<Instant>,
+    system: sys::System,
+}
+
+fn build_status(radio: &Radio, system: sys::System, started: u64, agent_running: bool) -> Status {
+    let network = system.ifaces.iter().any(|i| i.up && i.default_route);
+    let t = now();
+    Status {
+        now: t,
+        agent_version: VERSION,
+        health: health(radio, &system.services, network, started, t),
+        radio: radio.clone(),
+        system,
+        registered: status::registered_gateway(),
+        channels: sys::channel_plan(),
+        agent_running,
+    }
+}
+
+fn serve(args: &[String]) -> ExitCode {
+    let listen = opt(args, "--listen", DEFAULT_LISTEN);
+    let broker = opt(args, "--broker", DEFAULT_BROKER);
+    let started = now();
+    let shared: radio::Shared = Arc::new(Mutex::new(Radio::default()));
+    radio::spawn(shared.clone(), broker);
+
+    // LED: re-evaluated every 10 s from cheap checks (one systemctl call, /sys and /proc reads).
+    {
+        let shared = shared.clone();
+        thread::spawn(move || {
+            let mut led = led::Led::new();
+            if !led.present() {
+                eprintln!("no red:/green:/blue: LEDs in /sys/class/leds, LED status off");
+                return;
+            }
+            loop {
+                let services = sys::service_states(&sys::units());
+                let h = health(
+                    &shared.lock().unwrap(),
+                    &services,
+                    sys::network_ok(),
+                    started,
+                    now(),
+                );
+                led.show(h.level);
+                thread::sleep(Duration::from_secs(10));
+            }
+        });
+    }
+
+    let listener = match http::bind(&listen) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("cannot listen on {listen}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("lorawan-agent {VERSION}: panel on {listen}");
+    let cache = Arc::new(Mutex::new(Cache {
+        at: None,
+        system: sys::System::default(),
+    }));
+    let route = move |path: &str| -> Response {
+        let status = || {
+            let system = {
+                let mut c = cache.lock().unwrap();
+                if c.at.is_none_or(|t| t.elapsed() > Duration::from_secs(4)) {
+                    c.system = sys::snapshot();
+                    c.at = Some(Instant::now());
+                }
+                c.system.clone()
+            };
+            let radio = shared.lock().unwrap().clone();
+            build_status(&radio, system, started, true)
+        };
+        match path {
+            "/" | "/index.html" => Response::new(200, "text/html; charset=utf-8", INDEX),
+            "/api/status" => Response::new(200, "application/json", status().to_json()),
+            "/api/status.txt" => {
+                Response::new(200, "text/plain; charset=utf-8", status().to_text())
+            }
+            _ => Response::new(404, "text/plain", "not found\n"),
+        }
+    };
+    http::serve(listener, Arc::new(route))
+}
+
+fn diag(args: &[String]) -> ExitCode {
+    let agent = opt(args, "--agent", "127.0.0.1:80");
+    match http::request(
+        &agent,
+        "GET",
+        "/api/status.txt",
+        &[],
+        b"",
+        Duration::from_secs(10),
+    ) {
+        Ok(r) if r.status == 200 => print!("{}", String::from_utf8_lossy(&r.body)),
+        _ => {
+            // Agent not running: report what can be seen without it.
+            let s = build_status(&Radio::default(), sys::snapshot(), 0, false);
+            print!("{}", s.to_text());
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = env::args().collect();
+    let invoked_as = args
+        .first()
+        .and_then(|a| a.rsplit('/').next())
+        .unwrap_or_default();
+    let (cmd, rest) = if invoked_as == "lorawan-diag" {
+        ("diag", &args[1..])
+    } else {
+        (
+            args.get(1).map(String::as_str).unwrap_or(""),
+            args.get(2..).unwrap_or_default(),
+        )
+    };
+    match cmd {
+        "serve" => serve(rest),
+        "diag" => diag(rest),
+        "register" => {
+            let o = register::Options {
+                broker: opt(rest, "--broker", DEFAULT_BROKER),
+                api: opt(rest, "--api", "127.0.0.1:8080"),
+                chirpstack_config: opt(rest, "--chirpstack-config", "/etc/chirpstack"),
+                name: rest
+                    .windows(2)
+                    .find(|w| w[0] == "--name")
+                    .map(|w| w[1].clone()),
+                gateway_id: rest
+                    .windows(2)
+                    .find(|w| w[0] == "--gateway-id")
+                    .map(|w| w[1].clone()),
+            };
+            match register::run(&o) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        "led-reset" => {
+            led::Led::new().show(Level::Ok);
+            ExitCode::SUCCESS
+        }
+        "--version" | "-V" => {
+            println!("lorawan-agent {VERSION}");
+            ExitCode::SUCCESS
+        }
+        _ => {
+            eprint!("{USAGE}");
+            ExitCode::from(2)
+        }
+    }
+}

@@ -26,9 +26,9 @@ trigger; the single LEDs D3..D6 some notes describe are not on the G285.
 Steps:
 1. Device tree: group the three into one multicolour LED (`leds-group-multicolor`), so user space sets a colour
    through `/sys/class/leds/rgb:status/multi_intensity`; the heartbeat then moves to the service below.
-2. A small service for the RGB LED: blue while booting, green when the network and the concentrator are up,
-   red on a concentrator or ChirpStack failure, a short white flash per received uplink (from the MQTT
-   Forwarder's events on the local broker). Shell + `mosquitto_sub`, no new dependencies.
+2. Done in `lorawan-agent` (docs/lorawan-agent.md): green heartbeat when the gateway stack, the radio path and
+   the network are fine, blue without network, red on a failure. Still open: a short white flash per received
+   uplink.
 3. U-Boot (experimental branch): light the LED from power-on, so a board stuck before Linux shows it.
 
 Open: which states are worth a colour; brightness at night (an option to turn the RGB LED off).

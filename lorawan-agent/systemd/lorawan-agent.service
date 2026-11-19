@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=LoRaWAN gateway status panel (port 80) and LED status
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/lorawan-agent.md
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+ExecStart=/usr/bin/lorawan-agent serve
+# Back to the device tree's green heartbeat when the agent stops
+ExecStopPost=-/usr/bin/lorawan-agent led-reset
+Restart=always
+RestartSec=5
+# Root for port 80 and the LED files in /sys; everything else read-only
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

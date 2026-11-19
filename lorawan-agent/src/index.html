@@ -1,0 +1,212 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoRaWAN gateway</title>
+<style>
+:root {
+  --bg: #f5f6f4; --card: #ffffff; --text: #1d2420; --muted: #66706a; --line: #e2e5e1;
+  --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --info: #2563c9; --accent: #0f766e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121614; --card: #1b201d; --text: #e4e9e5; --muted: #8f9a93; --line: #2b322e;
+          --ok: #3fbf72; --warn: #e0a640; --bad: #ef6b5b; --info: #6b9cf0; --accent: #2dd4bf; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { padding: 18px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap;
+         align-items: baseline; gap: 6px 16px; }
+h1 { font-size: 20px; margin: 0; }
+header .sub { color: var(--muted); font-size: 13px; }
+header a { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
+main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 32px; display: grid; gap: 14px;
+       grid-template-columns: 1fr; }
+@media (min-width: 720px) { main { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { main { grid-template-columns: repeat(3, 1fr); } .span2 { grid-column: span 2; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+.wide { grid-column: 1 / -1; }
+#health { display: flex; align-items: center; gap: 12px; }
+#health .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+#health b { font-size: 17px; }
+#health ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; min-width: 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.st { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.ok { background: var(--ok); } .bad { background: var(--bad); } .warn { background: var(--warn); } .info { background: var(--info); }
+.tok { color: var(--ok); } .tbad { color: var(--bad); }
+.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.num { border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.num span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.num b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; }
+.empty { color: var(--muted); }
+td.r, th.r { text-align: right; }
+svg { display: block; width: 100%; height: auto; }
+svg .ok { fill: var(--ok); } svg .bad { fill: var(--bad); }
+svg text { fill: var(--muted); font-size: 11px; font-family: system-ui, sans-serif; }
+svg line { stroke: var(--line); }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 4px 0 10px; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.bar i.hi { background: var(--warn); } .bar i.full { background: var(--bad); }
+footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="host">LoRaWAN gateway</h1>
+  <span class="sub" id="os"></span>
+  <a id="cs" href="#">ChirpStack →</a>
+</header>
+<main>
+  <section class="card wide"><div id="health"><span class="dot warn"></span><div><b>Loading…</b></div></div></section>
+  <section class="card"><h2>Gateway</h2><dl id="gateway"></dl></section>
+  <section class="card"><h2>Radio</h2><div class="nums" id="nums"></div><dl id="radio"></dl></section>
+  <section class="card"><h2>Services</h2><div id="services"></div></section>
+  <section class="card wide"><h2>Frames per hour, last 24 h</h2><div id="history"></div></section>
+  <section class="card span2"><h2>Channels</h2><div class="scroll" id="channels"></div></section>
+  <section class="card"><h2>Duty cycle</h2><div id="duty"></div></section>
+  <section class="card"><h2>Data rates</h2><div class="scroll" id="rates"></div></section>
+  <section class="card"><h2>Downlinks</h2><div id="downlinks"></div></section>
+  <section class="card"><h2>System</h2><dl id="system"></dl></section>
+  <section class="card wide"><h2>Last frames</h2><div class="scroll" id="frames"></div></section>
+  <section class="card wide"><h2>Network</h2><div id="net"></div></section>
+</main>
+<footer id="foot"></footer>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dl = rows => rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("");
+const ago = (now, t) => { const s = Math.max(0, now - t); return s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const dur = s => { const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
+  return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`; };
+const mib = kb => `${Math.round(kb / 1024)} MiB`;
+const LEVEL = { ok: ["ok", "All good"], starting: ["info", "Starting"], "no-network": ["info", "No network"], fault: ["bad", "Problem"] };
+
+$("cs").href = `${location.protocol}//${location.hostname}:8080/`;
+
+function render(d) {
+  const [cls, label] = LEVEL[d.health.level] || ["warn", d.health.level];
+  $("health").innerHTML = `<span class="dot ${cls}"></span><div><b>${label}</b>` +
+    (d.health.problems.length ? `<ul>${d.health.problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : "") + `</div>`;
+
+  const g = d.gateway, s = d.system, r = d.radio;
+  $("host").textContent = s.hostname || "LoRaWAN gateway";
+  document.title = `${s.hostname} · LoRaWAN gateway`;
+  $("os").textContent = `${s.os} · Linux ${s.kernel}`;
+  $("gateway").innerHTML = dl([
+    ["Gateway ID", `<span class="mono">${esc(g.id || "unknown")}</span>`],
+    ["ChirpStack", g.registered ? `<span class="tok">registered</span>` : `<span class="empty">not registered yet</span>`],
+    ["Forwarder", g.online === true ? `<span class="tok">online</span>` : g.online === false ? `<span class="tbad">offline</span>` : "unknown"],
+    ["MQTT", g.mqtt_connected ? `<span class="tok">connected</span>` : `<span class="tbad">${esc(g.mqtt_error || "down")}</span>`],
+    ...Object.entries(g.versions).map(([k, v]) => [k.replace(/_version$/, "").replace(/_/g, " "),
+      `<span class="mono">${esc(v.replace(/^\s*Version:\s*/, "").replace(/;\s*$/, ""))}</span>`]),
+  ]);
+
+  const n = (label, v) => `<div class="num"><span>${label}</span><b>${v}</b></div>`;
+  $("nums").innerHTML = n("RX", r.total.rx) + n("CRC OK", r.total.rx_ok) + n("TX", r.total.tx) + n("TX sent", r.total.tx_emitted);
+  $("radio").innerHTML = dl([
+    ["Counted", "since the agent started"],
+    ["Last stats", r.last_stats_at ? `${ago(d.now, r.last_stats_at)}: rx ${r.last.rx} (ok ${r.last.rx_ok}), tx ${r.last.tx_emitted}` : `<span class="empty">none yet</span>`],
+  ]);
+
+  $("history").innerHTML = chart(d.now, r.history);
+
+  const freqs = [...new Set([...r.channels.map(c => c.frequency), ...Object.keys(r.rx_per_frequency).map(Number), ...Object.keys(r.tx_per_frequency).map(Number)])].sort((a, b) => a - b);
+  $("channels").innerHTML = freqs.length ? `<table><thead><tr><th>MHz</th><th>Channel</th><th class="r">RX</th><th class="r">TX</th></tr></thead><tbody>` +
+    freqs.map(f => `<tr><td>${(f / 1e6).toFixed(1)}</td><td>${esc(r.channels.filter(c => c.frequency === f).map(c => c.kind).join(", ") || "not in the plan")}</td>` +
+      `<td class="r">${r.rx_per_frequency[f] || 0}</td><td class="r">${r.tx_per_frequency[f] || 0}</td></tr>`).join("") + `</tbody></table>`
+    : `<p class="empty">No channel plan found.</p>`;
+
+  const mods = [...new Set([...Object.keys(r.rx_per_modulation), ...Object.keys(r.tx_per_modulation)])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  $("rates").innerHTML = mods.length ? `<table><thead><tr><th>Data rate</th><th class="r">RX</th><th class="r">TX</th></tr></thead><tbody>` +
+    mods.map(m => `<tr><td>${esc(m)}</td><td class="r">${r.rx_per_modulation[m] || 0}</td><td class="r">${r.tx_per_modulation[m] || 0}</td></tr>`).join("") + `</tbody></table>`
+    : `<p class="empty">Nothing received or sent yet.</p>`;
+
+  const results = Object.entries(r.downlink_results);
+  $("downlinks").innerHTML = results.length ? dl(results.map(([k, v]) => [k.replace(/_/g, " ").toLowerCase(), `<span class="${k === "OK" ? "tok" : "tbad"}">${v}</span>`]))
+    : `<p class="empty">No downlinks sent yet. Join accepts and confirmed-uplink acks show up here, with errors such as “too late” or “duty cycle overflow”.</p>`;
+
+  const dc = r.duty_cycle;
+  $("duty").innerHTML = dc && dc.bands.length ? `<div class="empty" style="margin-bottom:6px">${esc(dc.regulation)}, per ${Math.round(dc.window_s / 60)} min</div>` +
+    dc.bands.map(b => { const pct = b.load_max_ms ? 100 * b.load_tracked_ms / b.load_max_ms : 0;
+      return `<div>${esc(b.name)} <span class="empty">${(b.frequency_min / 1e6).toFixed(3)}–${(b.frequency_max / 1e6).toFixed(3)} MHz · ${(b.load_tracked_ms / 1000).toFixed(1)} of ${(b.load_max_ms / 1000).toFixed(0)} s (${pct.toFixed(1)} %)</span></div>` +
+        `<div class="bar"><i class="${pct >= 90 ? "full" : pct >= 60 ? "hi" : ""}" style="width:${Math.min(100, pct).toFixed(1)}%"></i></div>`; }).join("")
+    : `<p class="empty">No transmissions tracked yet.</p>`;
+
+  $("frames").innerHTML = r.frames.length ? `<table><thead><tr><th>When</th><th>MHz</th><th>Ch</th><th>Data rate</th><th>CR</th><th>RSSI</th><th>SNR</th><th>CRC</th><th>Type</th><th>Device</th><th>FCnt</th><th>Bytes</th></tr></thead><tbody>` +
+    r.frames.map(f => `<tr><td>${ago(d.now, f.at)}</td><td>${(f.frequency / 1e6).toFixed(1)}</td><td>${f.channel}</td><td>${esc(f.modulation)}</td><td>${esc(f.code_rate)}</td><td>${f.rssi} dBm</td><td>${f.snr} dB</td>` +
+      `<td class="${f.crc_status === 2 ? "tok" : "tbad"}">${["none", "bad", "ok"][f.crc_status] || f.crc_status}</td><td>${esc(f.kind)}</td>` +
+      `<td class="mono">${esc(f.device)}</td><td>${f.f_cnt ?? ""}</td><td>${f.size}</td></tr>`).join("") + `</tbody></table>`
+    : `<p class="empty">No frames heard since the agent started. LoRaWAN devices nearby show up here.</p>`;
+
+  $("services").innerHTML = s.services.map(x => `<div><span class="st ${x.state === "active" ? "ok" : "bad"}"></span>${esc(x.unit)} <span class="empty">${x.state === "active" ? "" : esc(x.state)}</span></div>`).join("");
+
+  $("net").innerHTML = s.interfaces.map(i => {
+    const st = i.carrier ? "ok" : i.up ? "warn" : "bad";
+    const bits = [i.carrier ? "link" : i.up ? "up, no link" : "down"];
+    if (i.speed_mbps) bits.push(`${i.speed_mbps} Mb/s`);
+    if (i.ssid) bits.push(`“${esc(i.ssid)}”`);
+    if (i.signal_dbm != null) bits.push(`${i.signal_dbm} dBm`);
+    if (i.default_route) bits.push("default route");
+    return `<div style="margin-bottom:8px"><span class="st ${st}"></span><b>${esc(i.name)}</b> <span class="empty">${bits.join(" · ")}</span>` +
+      [...i.ipv4, ...i.ipv6].map(a => `<div class="mono" style="padding-left:16px">${esc(a)}</div>`).join("") + `</div>`;
+  }).join("");
+
+  $("system").innerHTML = dl([
+    ["Uptime", dur(s.uptime_s)],
+    ["Load", s.load.map(x => x.toFixed(2)).join(" ")],
+    ["Memory", `${mib(s.mem_available_kb)} free of ${mib(s.mem_total_kb)}`],
+    ["Disk /", `${mib(s.disk_used_kb)} used of ${mib(s.disk_total_kb)}`],
+    ...s.temps.map(t => [t.name, `${t.celsius.toFixed(1)} °C`]),
+  ]);
+  $("foot").textContent = `lorawan-agent ${d.agent_version} · refreshed ${new Date().toLocaleTimeString()} · text report: lorawan-diag`;
+}
+
+// 24 hourly bars, CRC OK below and bad CRC on top; hours without stats are gaps.
+function chart(now, history) {
+  if (!history.length) return `<p class="empty">Collecting: one bar per hour from the concentrator's stats.</p>`;
+  const W = 720, H = 150, top = 10, bottom = 24, left = 34, slot = (W - left) / 24;
+  const hour0 = now - now % 3600 - 23 * 3600;
+  const byStart = Object.fromEntries(history.map(h => [h.start, h]));
+  const max = Math.max(1, ...history.map(h => h.rx));
+  const y = v => top + (H - top - bottom) * (1 - v / max);
+  let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Frames received per hour">`;
+  for (const v of [0, max / 2, max]) {
+    out += `<line x1="${left}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${left - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v)}</text>`;
+  }
+  for (let i = 0; i < 24; i++) {
+    const start = hour0 + i * 3600, h = byStart[start], x = left + i * slot + 2, w = slot - 4;
+    if (h) {
+      const ok = Math.min(h.rx_ok, h.rx);
+      out += `<rect class="ok" x="${x}" width="${w}" y="${y(ok)}" height="${y(0) - y(ok)}"><title>${new Date(start * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: ${h.rx} received, ${ok} CRC OK, ${h.tx} sent</title></rect>`;
+      if (h.rx > ok) out += `<rect class="bad" x="${x}" width="${w}" y="${y(h.rx)}" height="${y(ok) - y(h.rx)}"/>`;
+    }
+    if (i % 6 === 0 || i === 23) out += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle">${new Date(start * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</text>`;
+  }
+  return out + `</svg>`;
+}
+
+async function tick() {
+  try {
+    const res = await fetch("api/status", { cache: "no-store" });
+    render(await res.json());
+  } catch (e) {
+    $("health").innerHTML = `<span class="dot bad"></span><div><b>No answer from the gateway</b><ul><li>${esc(e.message)}</li></ul></div>`;
+  }
+}
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>
