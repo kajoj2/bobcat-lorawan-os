@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
+/*
+ * U-Boot additions to the board's Linux device tree (rk3566-bobcat-g285.dts,
+ * built by U-Boot from the same file). EXPERIMENTAL, see
+ * docs/experimental-boot-firmware.md.
+ */
+
+#include "rk356x-u-boot.dtsi"
+
+/ {
+	options {
+		u-boot {
+			/*
+			 * Red from U-Boot's start (as the factory firmware leaves it);
+			 * Linux turns it off and lets green heartbeat.
+			 */
+			boot-led = <&{/leds/led-red}>;
+		};
+	};
+};
+
+/* U-Boot looks LEDs up by label (`led red on`) */
+&{/leds/led-red} {
+	label = "red";
+};
+
+&{/leds/led-green} {
+	label = "green";
+};
+
+&{/leds/led-blue} {
+	label = "blue";
+};
+
+/*
+ * The Wi-Fi SDIO bus is Linux's alone. Probing it from U-Boot (the card does
+ * not answer, its power sequence is Linux's mmc-pwrseq) leaves the BCM43430
+ * in a state Linux does not clear: at 50 MHz the card then fails with -84 or
+ * brcmfmac with -84/-52 on every boot.
+ */
+&sdmmc1 {
+	status = "disabled";
+};
+
+/* The micro USB port as a device: `ums` (USB mass storage) and `rockusb` */
+&usb_host0_xhci {
+	dr_mode = "peripheral";
+};

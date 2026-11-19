@@ -16,3 +16,17 @@ path = "meta-bobcat/recipes-kernel/linux/files/patches/*.patch"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
 SPDX-License-Identifier = "GPL-2.0-or-later"
+
+# rkbin's ddrbin_tool reads this file as key=value lines and has no comment syntax for a header.
+[[annotations]]
+path = "meta-bobcat/recipes-bsp/rkbin/files/ddrbin_param.txt"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
+SPDX-License-Identifier = "MIT"
+
+# U-Boot configuration fragments are U-Boot's own format, GPL-2.0+ like U-Boot.
+[[annotations]]
+path = "meta-bobcat/recipes-bsp/u-boot/files/*_defconfig"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 bobcat-lorawan-os contributors"
+SPDX-License-Identifier = "GPL-2.0-or-later"

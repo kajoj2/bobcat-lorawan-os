@@ -1,0 +1,4 @@
+start tag=0x12345678
+lp4x_freq=@BOBCAT_DDR_MHZ@
+
+end
