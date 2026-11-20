@@ -65,8 +65,9 @@ the card, the panel (`http://bobcat-g285.local/`, "Internal storage (eMMC)") bac
 system onto it. From a shell the same is `bobcat-emmc` (`bobcat-emmc info`, `bobcat-emmc backup ITEM`,
 `bobcat-emmc install`).
 
-1. Change the ChirpStack admin password first (ChirpStack's web interface on port 8080): the panel's backups and
-   install ask for that login, and refuse while it is still admin/admin.
+1. Change the ChirpStack admin password (ChirpStack's web interface on port 8080): the panel's backups and install
+   ask for that login. The default admin/admin works too, but then anyone on your network can use them; the page
+   warns while it is the default.
 2. **Back up the factory eMMC** if you may ever want the Bobcat firmware back. The panel offers:
    - **Essentials**: the partition table, the boot loader and every partition with only its used blocks
      (`e2image`). That is everything needed to put the eMMC back as it was, ~640 MB compressed and a few minutes

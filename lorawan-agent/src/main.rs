@@ -149,10 +149,10 @@ fn serve(args: &[String]) -> ExitCode {
                 "application/json",
                 update::info_json(&updating, auth.default_password_valid().ok()),
             ),
-            // Installing a system is full control over the gateway: always behind the ChirpStack login, which may
-            // still be admin/admin (owner's choice; the card warns, bundles are signed anyway).
+            // Installing a system is full control over the gateway: always behind the ChirpStack login (admin/admin
+            // accepted, the card warns; bundles are signed anyway).
             (_, p) if p.starts_with("/api/update/") => {
-                if let Some(denied) = refusal(auth.check_login(req)) {
+                if let Some(denied) = refusal(auth.check(req)) {
                     return denied;
                 }
                 match (get, &p["/api/update/".len()..]) {
@@ -162,7 +162,11 @@ fn serve(args: &[String]) -> ExitCode {
                     _ => Response::new(404, "text/plain", "not found\n"),
                 }
             }
-            (true, "/api/storage") => Response::new(200, "application/json", storage::info_json()),
+            (true, "/api/storage") => Response::new(
+                200,
+                "application/json",
+                storage::info_json(auth.default_password_valid().ok()),
+            ),
             (_, p) if p.starts_with("/api/storage/") => {
                 if let Some(denied) = login_required(&auth, req) {
                     return denied;
@@ -192,15 +196,16 @@ fn refusal(check: auth::Check) -> Option<Response> {
     match check {
         auth::Check::Ok => None,
         auth::Check::Unauthorized => Some(
-            Response::new(401, "text/plain", "log in with a ChirpStack user (email and password)\n")
-                .with_header("WWW-Authenticate", "Basic realm=\"Gateway: ChirpStack login\", charset=\"UTF-8\""),
+            Response::new(
+                401,
+                "text/plain",
+                "log in with a ChirpStack user (email and password)\n",
+            )
+            .with_header(
+                "WWW-Authenticate",
+                "Basic realm=\"Gateway: ChirpStack login\", charset=\"UTF-8\"",
+            ),
         ),
-        auth::Check::DefaultPassword => Some(Response::new(
-            403,
-            "text/plain",
-            "ChirpStack still has its default password (admin/admin). Change it in the ChirpStack web interface \
-             (port 8080) first: these actions are protected by that login.\n",
-        )),
         auth::Check::Unavailable(e) => Some(Response::new(
             503,
             "text/plain",

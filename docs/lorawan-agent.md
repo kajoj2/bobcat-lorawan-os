@@ -11,7 +11,7 @@ check without logging in:
 | Front LED | Green heartbeat: all fine. Blue: no network (no interface with a default route). Red: a gateway service is down, Mosquitto is unreachable, or the concentrator has sent no stats for 2 minutes. While starting (first 3 minutes) the device tree's green heartbeat stays. |
 | System update | Card "System update" where the gateway runs as an A/B slot (RAUC): version and boot state of both slots, upload of a signed bundle with progress, install into the other slot, restart. Upload and restart need a ChirpStack login (admin/admin accepted, with a warning on the card). Details: docs/updates.md. |
 | Community networks | Card "Community networks" on the panel: forward what the gateway hears to The Things Network (a cluster to tick) or any Semtech UDP server, next to the local ChirpStack; per server whether it answers, uplinks sent, downlinks; a warning while ChirpStack still has admin/admin. No login yet. Off by default. Details: docs/forwarding.md. |
-| eMMC page (Bobcat) | "Internal storage (eMMC)" on the panel, where the board's `bobcat-emmc` helper is installed: what is on the eMMC, backups of it as downloads (the essentials of a few hundred MB, or a full raw copy), and installing the running system from the SD card onto it. Downloads and the install need a ChirpStack login and are refused while ChirpStack still accepts admin/admin. Details: docs/flashing.md, "Install onto the eMMC". |
+| eMMC page (Bobcat) | "Internal storage (eMMC)" on the panel, where the board's `bobcat-emmc` helper is installed: what is on the eMMC, backups of it as downloads (the essentials of a few hundred MB, or a full raw copy), and installing the running system from the SD card onto it. Downloads and the install need a ChirpStack login (admin/admin accepted, with a warning on the card). Details: docs/flashing.md, "Install onto the eMMC". |
 | ChirpStack registration | On the first boot the gateway adds itself to the local ChirpStack (tenant "ChirpStack", name = host name, stats every 30 s), so it appears under Gateways without typing its EUI. |
 
 ## How it works
@@ -42,14 +42,16 @@ check without logging in:
   with `server=host:port` repeated (up to 4; none turns forwarding off). Neither needs a login for now. It writes `/var/lib/lorawan-forward/servers.toml` (the unit's `StateDirectory`) and restarts or
   stops `chirpstack-udp-forwarder.service`. While a server list exists, that service counts as a gateway service
   for the health and the LED.
-- **eMMC page**: `GET /api/storage` (state, from `bobcat-emmc info`; no login), and behind a login
+- **eMMC page**: `GET /api/storage` (state, from `bobcat-emmc info`, whether ChirpStack still has admin/admin; no
+  login), and behind a login
   `GET /api/storage/login`, `GET /api/storage/backup/<item>` (streams `bobcat-emmc backup <item>` with a file
   name) and `POST /api/storage/install` with `confirm=ERASE` (starts `bobcat-emmc-install.service`, so the install
   does not depend on the panel or the request). The login is HTTP Basic with a ChirpStack user's email and
   password, checked with ChirpStack's own `InternalService/Login`; a good login is remembered for 10 minutes, a
   wrong one waits 2 s. Over plain HTTP, like ChirpStack's own interface on port 8080: use it on your LAN only.
-- The ChirpStack login stays `admin` / `admin` until you change it in the web interface (docs/flashing.md); the
-  eMMC page refuses backups and the install until then.
+- The ChirpStack login stays `admin` / `admin` until you change it in the web interface (docs/flashing.md). The
+  panel accepts it too (owner's choice): the update, eMMC and community network cards warn while it is the default,
+  since anyone on the LAN knows it.
 
 ## Commands
 

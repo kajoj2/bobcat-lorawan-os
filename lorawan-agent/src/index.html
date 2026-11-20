@@ -290,7 +290,7 @@ async function uploadBundle() {
   const file = $("upd-file").files[0], note = $("upd-note");
   if (!file) return;
   $("upd-go").disabled = true;
-  // Log in first (the browser asks), with a clear answer for the default password.
+  // Log in first (the browser shows its dialog).
   const r = await fetch("api/update/login", { cache: "no-store" }).catch(e => ({ ok: false, text: async () => e.message }));
   if (!r.ok) { note.textContent = await r.text(); $("upd-go").disabled = false; return; }
   const xhr = new XMLHttpRequest();
@@ -407,7 +407,9 @@ function renderStorage(d) {
   if (!d.available) return;
   const inst = d.install || {};
   installing = inst.state === "running";
-  let h = `<dl>` + dl([
+  let h = (d.default_password ? `<div class="warnbox"><b>ChirpStack still has its default password (admin/admin)</b>, so anyone on ` +
+    `your network can download these backups and install here. Change it in the <a class="dl" href="${esc($("cs").href)}">ChirpStack web interface</a>.</div>` : "") +
+    `<dl>` + dl([
     ["Running from", d.boot === "sd" ? "the SD card" : d.boot === "emmc" ? "the eMMC" : esc(d.boot)],
     ["eMMC", d.emmc === "present" ? `${gb(d.emmc_bytes)}, ${esc(CONTENT[d.content] || d.content)}` : "not found"],
   ]) + `</dl>`;
@@ -427,7 +429,7 @@ function renderStorage(d) {
     const items = backupItems(d);
     const total = items.reduce((a, [, , b]) => a + b, 0);
     h += `<details${d.content === "factory" ? " open" : ""}><summary>Back up the eMMC</summary>` +
-      `<p class="note">Downloads ask for a ChirpStack login (the account you use on port 8080). Back up before installing: the install erases the whole eMMC.</p>` +
+      `<p class="note">Downloads ask for a ChirpStack login (the account you use on port 8080; admin/admin until you change it). Back up before installing: the install erases the whole eMMC.</p>` +
       `<p><b>Essentials</b>: everything needed to put the eMMC back as it is now, without its free space. About ${gb(total)} before compression, a few minutes in total. Keep the files together:</p>` +
       `<ul class="files">` + items.map(([i, label]) => `<li><a class="dl" href="api/storage/backup/${i}">${esc(i)}</a> ${esc(label)}</li>`).join("") +
       `<li><a class="dl" href="api/storage/backup/restore">RESTORE.txt</a> how to write them back</li></ul>` +
@@ -466,7 +468,7 @@ async function startInstall() {
   const msg = $("install-msg");
   $("install").disabled = true;
   try {
-    // Ask for the login first, with a clear answer for the default password.
+    // Ask for the login first (the browser shows its dialog).
     let r = await fetch("api/storage/login", { cache: "no-store" });
     if (r.ok) r = await fetch("api/storage/install", { method: "POST", body: "confirm=ERASE",
       headers: { "Content-Type": "application/x-www-form-urlencoded" } });

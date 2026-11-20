@@ -43,12 +43,18 @@ fn num(s: &str) -> u64 {
     s.parse().unwrap_or(0)
 }
 
-pub fn info_json() -> String {
+/// `default_password`: whether ChirpStack still accepts admin/admin (None: it did not answer).
+pub fn info_json(default_password: Option<bool>) -> String {
     if !available() {
         return "{\"available\":false}".into();
     }
     let info = info();
-    let mut o = String::from("{\"available\":true");
+    let dp = match default_password {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "null",
+    };
+    let mut o = format!("{{\"available\":true,\"default_password\":{dp}");
     for (key, name) in [
         ("emmc", "emmc"),
         ("emmc_content", "content"),
