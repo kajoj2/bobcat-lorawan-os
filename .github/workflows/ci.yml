@@ -8,6 +8,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Started by the updates workflow on its lock pull requests (their events do not start workflows by themselves).
+  workflow_dispatch:
 
 permissions:
   contents: read
