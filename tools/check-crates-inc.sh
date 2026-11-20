@@ -17,7 +17,11 @@ for inc in $(git ls-files 'meta-*/*-crates.inc'); do
     [ -n "$bb" ] || { echo "$inc: no ${name}_<version>.bb next to it"; status=1; continue; }
     repo=$(sed -n 's|.*git://github\.com/\([A-Za-z0-9._-]*/[A-Za-z0-9._-]*\)\.git;.*|\1|p' "$bb" | head -n 1)
     rev=$(sed -n 's|^SRCREV = "\([0-9a-f]\{40\}\)"|\1|p' "$bb")
-    [ -n "$repo" ] && [ -n "$rev" ] || { echo "$bb: no GitHub SRC_URI or SRCREV found"; status=1; continue; }
+    if [ -z "$repo" ] || [ -z "$rev" ]; then
+        echo "$bb: no GitHub SRC_URI or SRCREV found"
+        status=1
+        continue
+    fi
     if tools/cargo-crates-inc.py "https://raw.githubusercontent.com/$repo/$rev/Cargo.lock" "$name" | diff -u "$inc" -; then
         echo "$inc: matches $repo@${rev%"${rev#????????????}"}"
     else
