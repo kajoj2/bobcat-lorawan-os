@@ -34,7 +34,7 @@ The factory system on the eMMC stays as it was: take the card out and the Bobcat
 
 The RK3566's boot ROM starts the boot loader on the eMMC first. Bobcat's factory loader (Rockchip U-Boot 2017.09)
 looks at the SD card before its own eMMC and loads U-Boot from the card's GPT entry named `uboot`. Our card has
-that entry first, holding our U-Boot and TF-A, which then boot our Linux from the card (`wic/bobcat-g285.wks`).
+that entry first, holding our U-Boot and TF-A, which then boot our Linux from the card (`meta-bobcat/files/wic/bobcat-g285.wks`).
 The memory is set up by the factory loader, at its 1056 MHz.
 
 Earlier images (before 2026-11-20) used meta-rockchip's nine-entry layout without a `uboot` entry; the factory

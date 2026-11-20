@@ -54,7 +54,7 @@ Short records; newest last. Each says what was chosen and why, so a later change
 ## Open questions
 
 - Answered (2026-11-17, 2026-11-20): the factory eMMC loader starts our U-Boot from the card when the card's GPT has
-  an entry named `uboot` first (`wic/bobcat-g285.wks`); meta-rockchip's layout made it run out of memory. So the
+  an entry named `uboot` first (`meta-bobcat/files/wic/bobcat-g285.wks`); meta-rockchip's layout made it run out of memory. So the
   card works on an unmodified board (docs/flashing.md).
 - Boot chain: SPL and U-Boot are built from mainline, the DDR init (TPL) and BL31 are rkbin blobs. Replace BL31
   with upstream TF-A if its RK3566/RK3568 support is complete enough, which leaves the DDR blob as the only closed
