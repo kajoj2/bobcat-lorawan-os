@@ -21,43 +21,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # hashFiles() is not available where a reusable workflow is called; the caches are keyed on the lock file's hash.
+  prepare:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'full-build'
+    runs-on: ubuntu-24.04
+    outputs:
+      lock: ${{ steps.lock.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: lock
+        run: echo "hash=${{ hashFiles('kas/bobcat-g285.lock.yml') }}" >> "$GITHUB_OUTPUT"
+
   # Cross toolchain, kernel, U-Boot: the same targets as the build workflow, starting from its cache.
   toolchain:
-    if: github.event_name != 'pull_request' || github.event.label.name == 'full-build'
+    needs: prepare
     uses: ./.github/workflows/stage.yml
     with:
       name: 1-toolchain
       targets: >-
         virtual/kernel virtual/bootloader libloragw-sx1302:do_package_qa bobcat-emmc:do_package_qa
         bobcat-rauc:do_package_qa bobcat-wifibt-firmware:do_package_qa
-      cache-restore: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-
-      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      cache-restore: sstate-board-${{ needs.prepare.outputs.lock }}-
+      lock-hash: ${{ needs.prepare.outputs.lock }}
 
   # The Rust toolchain (LLVM, rust, cargo), through the smallest Rust recipe.
   rust:
-    needs: toolchain
+    needs: [prepare, toolchain]
     uses: ./.github/workflows/stage.yml
     with:
       name: 2-rust
-      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      lock-hash: ${{ needs.prepare.outputs.lock }}
       targets: lorawan-agent:do_package_qa
 
   # ChirpStack and its companions. chirpstack's link (LTO) is the heaviest task of the build.
   chirpstack:
-    needs: rust
+    needs: [prepare, rust]
     uses: ./.github/workflows/stage.yml
     with:
       name: 3-chirpstack
-      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      lock-hash: ${{ needs.prepare.outputs.lock }}
       targets: >-
         chirpstack-concentratord:do_package_qa chirpstack-mqtt-forwarder:do_package_qa
         chirpstack-udp-forwarder:do_package_qa chirpstack:do_package_qa
 
   # The rest of the userland, the image and the update bundle (signed with the throwaway CI keys).
   image:
-    needs: chirpstack
+    needs: [prepare, chirpstack]
     uses: ./.github/workflows/stage.yml
     with:
       name: 4-image
-      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      lock-hash: ${{ needs.prepare.outputs.lock }}
       targets: lorawan-gateway-image lorawan-gateway-bundle
