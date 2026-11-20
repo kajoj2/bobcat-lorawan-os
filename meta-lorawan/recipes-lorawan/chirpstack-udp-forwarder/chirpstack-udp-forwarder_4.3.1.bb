@@ -11,6 +11,7 @@ inherit cargo cargo-update-recipe-crates systemd
 SRC_URI = " \
     git://github.com/chirpstack/chirpstack-udp-forwarder.git;protocol=https;nobranch=1;tag=v${PV} \
     file://chirpstack-udp-forwarder.service \
+    file://0001-Send-TX_ACK-without-JSON-when-the-downlink-was-accepted.patch \
 "
 SRCREV = "2a6980afe52f6f10f01beec21f1ccfe55fcbb955"
 
