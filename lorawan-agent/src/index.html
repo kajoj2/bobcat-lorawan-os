@@ -250,7 +250,10 @@ function renderUpdate(d) {
   if (!d.available) return;
   const i = d.install || {};
   updateBusy = i.state === "uploading" || i.state === "installing";
-  let h = `<p>Two system slots, A and B: an update goes into the one not running, and the gateway restarts into it. ` +
+  let h = d.default_password ? `<div class="warnbox"><b>ChirpStack still has its default password (admin/admin)</b>, which also ` +
+    `lets anyone on your network install a system here (only bundles signed with your build's key are accepted). Change it in the ` +
+    `<a class="dl" href="${esc($("cs").href)}">ChirpStack web interface</a>.</div>` : "";
+  h += `<p>Two system slots, A and B: an update goes into the one not running, and the gateway restarts into it. ` +
     `If the new system does not come up three times in a row, it goes back to the old one by itself. Settings, ChirpStack data and the Wi-Fi network stay.</p>` +
     `<div class="scroll"><table><tr><th>Slot</th><th>Version</th><th>Installed</th><th>Boot</th></tr>${slotRows(d)}</table></div>`;
   if (uploadPct !== null) {
@@ -269,7 +272,7 @@ function renderUpdate(d) {
       `<p>An update bundle (<span class="mono">.raucb</span>) built for this gateway and signed with the key its system trusts; ` +
       `anything else is refused before the slot is touched.</p>` +
       `<p><input type="file" id="upd-file" accept=".raucb"> <button class="primary" id="upd-go" disabled>Upload and install</button></p>` +
-      `<p class="note" id="upd-note">Asks for a ChirpStack login (the account you use on port 8080), and is refused while ChirpStack still has its default password.</p></details>`;
+      `<p class="note" id="upd-note">Asks for a ChirpStack login (the account you use on port 8080; admin/admin until you change it).</p></details>`;
   }
   const open = document.querySelector("#update details")?.open;
   const file = $("upd-file") && $("upd-file").files[0];

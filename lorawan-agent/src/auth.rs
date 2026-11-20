@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 //! Login for the panel's eMMC actions (backups, install): HTTP Basic with a ChirpStack user's email and password,
 //! checked against ChirpStack's own login (`api.InternalService/Login`). The panel keeps no accounts of its own.
-//! While ChirpStack still accepts its default admin/admin, these actions are refused: anyone on the LAN would know it.
+//! While ChirpStack still accepts its default admin/admin, the eMMC actions are refused: anyone on the LAN would
+//! know it. System updates take that login too (`check_login`); their card warns instead.
 
 use crate::http::Request;
 use crate::pb::Writer;
@@ -73,12 +74,18 @@ impl Auth {
         Ok(v)
     }
 
+    /// A valid ChirpStack login, refused while ChirpStack still has admin/admin (the eMMC page).
     pub fn check(&self, req: &Request) -> Check {
         match self.default_password_valid() {
             Ok(true) => return Check::DefaultPassword,
             Ok(false) => {}
             Err(e) => return Check::Unavailable(e),
         }
+        self.check_login(req)
+    }
+
+    /// A valid ChirpStack login, admin/admin included (system updates: the owner's choice; the card warns).
+    pub fn check_login(&self, req: &Request) -> Check {
         let Some(header) = req.header("authorization") else {
             return Check::Unauthorized;
         };

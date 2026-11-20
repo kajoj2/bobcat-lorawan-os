@@ -82,7 +82,8 @@ fn rauc_status() -> String {
     }
 }
 
-pub fn info_json(progress: &Shared) -> String {
+/// `default_password`: whether ChirpStack still accepts admin/admin (None: it did not answer).
+pub fn info_json(progress: &Shared, default_password: Option<bool>) -> String {
     if !available() {
         return "{\"available\":false}".into();
     }
@@ -96,7 +97,12 @@ pub fn info_json(progress: &Shared) -> String {
     json_str(&mut o, p.state.name());
     let _ = write!(o, ",\"percent\":{},\"message\":", p.percent);
     json_str(&mut o, &p.message);
-    let _ = write!(o, ",\"at\":{}}}}}", p.at);
+    let dp = match default_password {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "null",
+    };
+    let _ = write!(o, ",\"at\":{}}},\"default_password\":{dp}}}", p.at);
     o
 }
 

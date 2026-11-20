@@ -15,8 +15,9 @@ slot to start next.
 On the panel (`http://<gateway>/`), card "System update" (shown when the gateway was started as an A/B slot):
 
 1. "Install an update", choose the bundle (`lorawan-gateway-bundle-bobcat-g285.raucb`), "Upload and install". The
-   browser asks for a ChirpStack login (the account of the web interface on port 8080); refused while ChirpStack
-   still has its default password admin/admin.
+   browser asks for a ChirpStack login (the account of the web interface on port 8080). The default admin/admin
+   works too; while ChirpStack has it, the card warns that anyone on your network can install a system (only
+   bundles signed with your build's key are accepted).
 2. The bundle is uploaded (a few hundred MB, onto the data partition), then RAUC checks it and writes the other
    slot. The card shows the progress.
 3. "Restart now". About a minute later the panel shows the new version as "running".
@@ -102,7 +103,7 @@ G285 on the eMMC, both slots and U-Boot from this repository:
 - Fallback: with the panel switched off on B (`systemctl mask lorawan-agent`), three starts of B used up its
   tries (2, 1, 0) and the fourth start was slot A, marked good. `rauc status mark-active other` and a restart went
   back to B.
-- The panel's upload refused with 403 while ChirpStack still had admin/admin, as intended.
+- The panel's upload needs a ChirpStack login; admin/admin is accepted (owner's choice), with a warning on the card.
 
 ## Limits
 

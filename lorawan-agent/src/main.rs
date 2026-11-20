@@ -144,12 +144,15 @@ fn serve(args: &[String]) -> ExitCode {
             ),
             // No login for now (owner's choice): the card only warns while ChirpStack has admin/admin.
             (false, "/api/forward") => forward::save(&req.body),
-            (true, "/api/update") => {
-                Response::new(200, "application/json", update::info_json(&updating))
-            }
-            // Installing a system is full control over the gateway: always behind the ChirpStack login.
+            (true, "/api/update") => Response::new(
+                200,
+                "application/json",
+                update::info_json(&updating, auth.default_password_valid().ok()),
+            ),
+            // Installing a system is full control over the gateway: always behind the ChirpStack login, which may
+            // still be admin/admin (owner's choice; the card warns, bundles are signed anyway).
             (_, p) if p.starts_with("/api/update/") => {
-                if let Some(denied) = login_required(&auth, req) {
+                if let Some(denied) = refusal(auth.check_login(req)) {
                     return denied;
                 }
                 match (get, &p["/api/update/".len()..]) {
@@ -182,7 +185,11 @@ fn serve(args: &[String]) -> ExitCode {
 
 /// None when the request may go on, else the refusal to send.
 fn login_required(auth: &auth::Auth, req: &Request) -> Option<Response> {
-    match auth.check(req) {
+    refusal(auth.check(req))
+}
+
+fn refusal(check: auth::Check) -> Option<Response> {
+    match check {
         auth::Check::Ok => None,
         auth::Check::Unauthorized => Some(
             Response::new(401, "text/plain", "log in with a ChirpStack user (email and password)\n")
