@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MIT
+# Weekly look for updates (a Renovate for this repository, which Renovate cannot handle: kas lock files, and Rust
+# recipes whose crate lists must be regenerated):
+#
+# - lock: moves kas/bobcat-g285.lock.yml to the heads of the layers' branches (meta-rockchip held back, see the kas
+#   file) and opens or updates the pull request on branch update/lock, with the new commits of each layer. Pull
+#   requests made with the workflow token do not start other workflows, so this job starts ci and build on it.
+# - releases: lists recipes whose upstream has a newer release in one issue, rewritten every week and closed when
+#   nothing is outdated. Updating such a recipe is a manual step (docs/building.md).
+#
+# Needs "Allow GitHub Actions to create and approve pull requests" in the repository's Actions settings.
+name: updates
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Move the lock to the branch heads
+        run: |
+          sudo apt-get install -y -qq python3-yaml > /dev/null
+          tools/update-lock.py kas/bobcat-g285.yml --hold meta-rockchip > "$RUNNER_TEMP/lock.md"
+          cat "$RUNNER_TEMP/lock.md"
+
+      - name: Open or update the pull request
+        id: pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: update/lock
+          delete-branch: true
+          add-paths: kas/bobcat-g285.lock.yml
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          commit-message: "Lock: move layers to their branch heads"
+          title: "Lock: move layers to their branch heads"
+          body-path: ${{ runner.temp }}/lock.md
+
+      - name: Start ci and build on the pull request
+        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run ci.yml --ref update/lock
+          gh workflow run build.yml --ref update/lock || echo "no build workflow on this branch"
+
+  releases:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      TITLE: Newer upstream releases
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Compare recipe versions with upstream releases
+        run: |
+          tools/check-upstream.py > "$RUNNER_TEMP/upstream.md"
+          cat "$RUNNER_TEMP/upstream.md"
+
+      - name: Open, update or close the issue
+        run: |
+          issue=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -s "$RUNNER_TEMP/upstream.md" ]; then
+            if [ -n "$issue" ]; then
+              gh issue edit "$issue" --body-file "$RUNNER_TEMP/upstream.md"
+            else
+              gh issue create --title "$TITLE" --body-file "$RUNNER_TEMP/upstream.md"
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "All recipes are at their latest upstream release."
+          fi

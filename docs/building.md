@@ -33,7 +33,11 @@ Output in `build/tmp/deploy/images/bobcat-g285/`:
 ## Pinned revisions
 
 `kas/bobcat-g285.lock.yml` pins every layer to a commit; recipes pin their sources (`SRCREV`, crate checksums).
-To move to newer layers: `kas lock kas/bobcat-g285.yml`, build, test, commit the lock file with the result.
+To move to newer layers: `tools/update-lock.py kas/bobcat-g285.yml --hold meta-rockchip` (needs PyYAML), then
+build, test, and commit the lock file with the result. Not `kas lock`: it would move meta-rockchip to its master,
+which no longer supports this release (see the kas file). The `updates` workflow does the same every Monday and
+opens a pull request with each layer's new commits; it also keeps an issue listing recipes with newer upstream
+releases (`tools/check-upstream.py`).
 
 ## Network access during the build
 
