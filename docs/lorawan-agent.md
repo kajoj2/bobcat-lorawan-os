@@ -9,6 +9,7 @@ check without logging in:
 | Web panel | `http://<gateway>/` (port 80): health, gateway ID, radio counters, frames per hour over the last 24 h, the channel plan with RX/TX per channel, RX/TX per data rate, downlink results (OK, too late, duty cycle overflow, ...), EU868 duty-cycle use per band, the last frames heard (channel, data rate, coding rate, RSSI, SNR, DevAddr/DevEUI), services, network, system. Read only, no login; ChirpStack itself stays on port 8080. JSON at `/api/status`, the text report at `/api/status.txt`. |
 | `lorawan-diag` | The same report in a terminal (over SSH or the serial console). Works without the agent running, minus the radio part. |
 | Front LED | Green heartbeat: all fine. Blue: no network (no interface with a default route). Red: a gateway service is down, Mosquitto is unreachable, or the concentrator has sent no stats for 2 minutes. While starting (first 3 minutes) the device tree's green heartbeat stays. |
+| System update | Card "System update" where the gateway runs as an A/B slot (RAUC): version and boot state of both slots, upload of a signed bundle with progress, install into the other slot, restart. Upload and restart need a ChirpStack login, refused while ChirpStack still accepts admin/admin. Details: docs/updates.md. |
 | Community networks | Card "Community networks" on the panel: forward what the gateway hears to The Things Network (a cluster to tick) or any Semtech UDP server, next to the local ChirpStack; per server whether it answers, uplinks sent, downlinks; a warning while ChirpStack still has admin/admin. No login yet. Off by default. Details: docs/forwarding.md. |
 | eMMC page (Bobcat) | "Internal storage (eMMC)" on the panel, where the board's `bobcat-emmc` helper is installed: what is on the eMMC, backups of it as downloads (the essentials of a few hundred MB, or a full raw copy), and installing the running system from the SD card onto it. Downloads and the install need a ChirpStack login and are refused while ChirpStack still accepts admin/admin. Details: docs/flashing.md, "Install onto the eMMC". |
 | ChirpStack registration | On the first boot the gateway adds itself to the local ChirpStack (tenant "ChirpStack", name = host name, stats every 30 s), so it appears under Gateways without typing its EUI. |
@@ -30,6 +31,11 @@ check without logging in:
   interface uses): `TenantService/List`, `GatewayService/Get`, `GatewayService/Create`. When done it writes
   `/var/lib/lorawan-agent/registered` and does not run again; delete that file to repeat it. A gateway added by
   hand before is left as it is. It retries for 30 minutes, then systemd starts it again 5 minutes later.
+- **System update**: `GET /api/update` (whether the system was started as an A/B slot, `rauc status
+  --detailed` as RAUC's JSON, the install's state and percentage; no login), and behind the login
+  `GET /api/update/login`, `POST /api/update/upload` (the bundle as the request body, streamed to
+  `/var/lib/lorawan-update/update.raucb`, up to 1 GiB; then `rauc install` in the background, its progress lines
+  feed the card; the file is deleted afterwards) and `POST /api/update/reboot`.
 - **Community networks**: `GET /api/forward` (servers, their state from chirpstack-udp-forwarder's Prometheus
   counters on `127.0.0.1:9800`, the TTN presets, whether ChirpStack still has admin/admin) and `POST /api/forward`
   with `server=host:port` repeated (up to 4; none turns forwarding off). Neither needs a login for now. It writes `/var/lib/lorawan-forward/servers.toml` (the unit's `StateDirectory`) and restarts or

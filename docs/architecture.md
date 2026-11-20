@@ -66,7 +66,8 @@ Short records; newest last. Each says what was chosen and why, so a later change
   (`PHY_RST_AFTER_CLK_EN`) or a oneshot service.
 - SD card wear: logs are already in RAM (oe-core's volatile `/var/log`) and ext4 mounts with `relatime`. Left:
   a separate data partition, read-only root with an overlay?
-- Updates: whole-image A/B (RAUC, `meta-rockchip` has a demo) or package feed?
+- Updates: decided 2026-11-20, whole-image A/B with RAUC, installed from the panel behind the ChirpStack login
+  (docs/updates.md).
 - ChirpStack web interface build needs the network (pnpm); make it offline (vendored store or Yocto's npm fetcher).
 - A first-boot way to set the ChirpStack admin password and open MQTT to the LAN with credentials.
 - The kernel version ends in `-dirty` because the DTS is copied into the kernel's git tree; carry it as a patch or

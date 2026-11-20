@@ -15,3 +15,5 @@ overrides:
       commit: 673e8d7c5dcd14de58092eb73e6ecc5eee5c1735
     meta-rockchip:
       commit: b6bc140cc2e1f8e811fb84ce15428a1412b7f242
+    meta-rauc:
+      commit: 38da0e5866a953e664001ba90b5edad68d68cd5d

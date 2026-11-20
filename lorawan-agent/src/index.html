@@ -94,6 +94,7 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card"><h2>System</h2><dl id="system"></dl></section>
   <section class="card wide"><h2>Last frames</h2><div class="scroll" id="frames"></div></section>
   <section class="card wide"><h2>Network</h2><div id="net"></div></section>
+  <section class="card wide" id="update-card" hidden><h2>System update</h2><div id="update"></div></section>
   <section class="card wide" id="forward-card" hidden><h2>Community networks</h2><div id="forward"></div></section>
   <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
@@ -225,6 +226,100 @@ async function tick() {
 }
 tick();
 setInterval(tick, 5000);
+
+// --- System update: A/B slots with RAUC ---------------------------------------------------------------------------
+let updateTimer = null, updateBusy = false, uploadPct = null;
+
+function slotRows(d) {
+  // rauc status JSON: slots is a list of { "rootfs.0": {...} }
+  const slots = ((d.rauc && d.rauc.slots) || []).map(o => Object.entries(o)[0]).filter(Boolean)
+    .filter(([name]) => name.startsWith("rootfs."));
+  return slots.map(([name, s]) => {
+    const st = s.slot_status || {}, b = st.bundle || {}, inst = st.installed || {};
+    const running = s.bootname === d.booted;
+    const next = d.rauc && d.rauc.boot_primary === name;
+    return `<tr><td><b>${esc(s.bootname || name)}</b>${running ? ` <span class="tok">running</span>` : ""}${next && !running ? ` <span class="tok">next boot</span>` : ""}</td>` +
+      `<td class="mono">${esc(b.version || (running ? "installed by hand" : "–"))}</td>` +
+      `<td>${inst.timestamp ? esc(inst.timestamp.replace("T", " ").replace(/\..*|Z$/, "")) : "–"}</td>` +
+      `<td>${s.boot_status === "good" ? `<span class="tok">good</span>` : s.boot_status === "bad" ? `<span class="tbad">bad</span>` : esc(s.boot_status || "–")}</td></tr>`;
+  }).join("");
+}
+
+function renderUpdate(d) {
+  $("update-card").hidden = !d.available;
+  if (!d.available) return;
+  const i = d.install || {};
+  updateBusy = i.state === "uploading" || i.state === "installing";
+  let h = `<p>Two system slots, A and B: an update goes into the one not running, and the gateway restarts into it. ` +
+    `If the new system does not come up three times in a row, it goes back to the old one by itself. Settings, ChirpStack data and the Wi-Fi network stay.</p>` +
+    `<div class="scroll"><table><tr><th>Slot</th><th>Version</th><th>Installed</th><th>Boot</th></tr>${slotRows(d)}</table></div>`;
+  if (uploadPct !== null) {
+    h += `<p><b>Uploading: ${uploadPct}%</b></p><div class="bar"><i style="width:${uploadPct}%"></i></div>`;
+  } else if (i.state === "installing" || i.state === "uploading") {
+    h += `<p><b>Installing: ${i.percent}%</b>, ${esc(i.message)}</p><div class="bar"><i style="width:${i.percent}%"></i></div>` +
+      `<p class="note">The gateway keeps working meanwhile. Do not power off.</p>`;
+  } else if (i.state === "done") {
+    h += `<div class="warnbox"><b>Installed.</b> ${esc(i.message)}</div>` +
+      `<p><button class="primary" id="upd-reboot">Restart now</button> <span class="note" id="upd-msg"></span></p>`;
+  } else if (i.state === "failed") {
+    h += `<div class="badbox"><b>The update failed:</b> ${esc(i.message)}. Nothing changed: the gateway keeps running this system.</div>`;
+  }
+  if (!updateBusy && uploadPct === null) {
+    h += `<details${i.state === "done" ? "" : " open"}><summary>Install an update</summary>` +
+      `<p>An update bundle (<span class="mono">.raucb</span>) built for this gateway and signed with the key its system trusts; ` +
+      `anything else is refused before the slot is touched.</p>` +
+      `<p><input type="file" id="upd-file" accept=".raucb"> <button class="primary" id="upd-go" disabled>Upload and install</button></p>` +
+      `<p class="note" id="upd-note">Asks for a ChirpStack login (the account you use on port 8080), and is refused while ChirpStack still has its default password.</p></details>`;
+  }
+  const open = document.querySelector("#update details")?.open;
+  const file = $("upd-file") && $("upd-file").files[0];
+  $("update").innerHTML = h;
+  if (open !== undefined && document.querySelector("#update details")) document.querySelector("#update details").open = open;
+  if ($("upd-file")) {
+    $("upd-file").addEventListener("change", () => { $("upd-go").disabled = !$("upd-file").files.length; });
+    $("upd-go").addEventListener("click", uploadBundle);
+    if (file) { const dt = new DataTransfer(); dt.items.add(file); $("upd-file").files = dt.files; $("upd-go").disabled = false; }
+  }
+  if ($("upd-reboot")) $("upd-reboot").addEventListener("click", rebootNow);
+}
+
+async function uploadBundle() {
+  const file = $("upd-file").files[0], note = $("upd-note");
+  if (!file) return;
+  $("upd-go").disabled = true;
+  // Log in first (the browser asks), with a clear answer for the default password.
+  const r = await fetch("api/update/login", { cache: "no-store" }).catch(e => ({ ok: false, text: async () => e.message }));
+  if (!r.ok) { note.textContent = await r.text(); $("upd-go").disabled = false; return; }
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "api/update/upload");
+  xhr.setRequestHeader("Content-Type", "application/octet-stream");
+  xhr.upload.onprogress = e => { if (e.lengthComputable) { uploadPct = Math.floor(100 * e.loaded / e.total); updateFetch(); } };
+  xhr.onloadend = () => { uploadPct = null; if (xhr.status !== 202 && $("upd-note")) $("upd-note").textContent = xhr.responseText || "upload failed"; updateFetch(); };
+  uploadPct = 0;
+  xhr.send(file);
+}
+
+async function rebootNow() {
+  $("upd-reboot").disabled = true;
+  const r = await fetch("api/update/reboot", { method: "POST" }).catch(e => ({ ok: false, text: async () => e.message }));
+  $("upd-msg").textContent = r.ok ? "Restarting: this page comes back in about a minute." : await r.text();
+}
+
+let updateLast = null;
+async function updateFetch() {
+  // While uploading, redraw from the last answer (the gateway is busy receiving)
+  if (uploadPct !== null && updateLast) return renderUpdate(updateLast);
+  try {
+    const r = await fetch("api/update", { cache: "no-store" });
+    if (r.ok) { updateLast = await r.json(); renderUpdate(updateLast); }
+  } catch (e) { /* the status card already shows a dead gateway */ }
+}
+async function updatePoll() {
+  clearTimeout(updateTimer);
+  await updateFetch();
+  updateTimer = setTimeout(updatePoll, updateBusy ? 2000 : 30000);
+}
+updatePoll();
 
 // --- Community networks: forwarding to The Things Network and others (chirpstack-udp-forwarder) -----------------
 const FSTATE = { connected: ["ok", "connected"], starting: ["info", "starting"], "no-answer": ["bad", "no answer"], stopped: ["bad", "forwarder not running"] };

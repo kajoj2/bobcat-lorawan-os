@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+# The eMMC's data partition on /var/lib when U-Boot started a slot of the A/B layout (docs/updates.md). A system
+# started any other way (an SD card, extlinux.conf) does not touch it.
+[Unit]
+Description=Gateway data (eMMC partition "data")
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/updates.md
+ConditionKernelCommandLine=rauc.slot
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+Requires=systemd-fsck@dev-disk-by\x2dpartlabel-data.service
+After=systemd-fsck@dev-disk-by\x2dpartlabel-data.service
+
+[Mount]
+What=/dev/disk/by-partlabel/data
+Where=/var/lib
+Type=ext4
+Options=defaults,noatime
+
+[Install]
+WantedBy=local-fs.target

@@ -8,6 +8,8 @@
 # Yocto 6.0 "wrynose" (LTS). Every repository is pinned to a commit in bobcat-g285.lock.yml, which kas applies
 # automatically; `kas lock kas/bobcat-g285.yml` refreshes it. Output:
 # build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-bobcat-g285.rootfs.wic (+ .bmap), see docs/flashing.md.
+# Update bundle for the panel: `kas build kas/bobcat-g285.yml --target lorawan-gateway-bundle` (docs/updates.md;
+# needs the update keys from tools/rauc-keys.sh).
 header:
   version: 14
 
@@ -54,6 +56,10 @@ repos:
   meta-rockchip:
     url: https://git.yoctoproject.org/meta-rockchip
     branch: master
+
+  # A/B updates (docs/updates.md)
+  meta-rauc:
+    url: https://github.com/rauc/meta-rauc
 
 local_conf_header:
   base: |

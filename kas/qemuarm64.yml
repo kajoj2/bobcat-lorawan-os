@@ -20,6 +20,8 @@ machine: qemuarm64
 
 local_conf_header:
   qemu: |
+    # meta-rauc is in the layer list for the board; QEMU has no A/B layout, so no 'rauc' distro feature here.
+    SKIP_META_RAUC_FEATURE_CHECK = "1"
     # Any SX1302 model Concentratord knows; there is no concentrator to talk to anyway.
     LORAWAN_CONCENTRATOR_MODEL = "rak_2287"
     # The board's RAM and core count. Arm64 on an x86 host runs without KVM, so boot takes a few minutes.

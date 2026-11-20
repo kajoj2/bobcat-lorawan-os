@@ -12,9 +12,10 @@ ExecStopPost=-/usr/bin/lorawan-agent led-reset
 Restart=always
 RestartSec=5
 # Root for port 80 and the LED files in /sys; everything else read-only, except the forwarding server list the
-# panel writes (/var/lib/lorawan-forward, read by chirpstack-udp-forwarder.service)
+# panel writes (/var/lib/lorawan-forward, read by chirpstack-udp-forwarder.service) and an uploaded update bundle
+# (/var/lib/lorawan-update, installed by RAUC's own service)
 ProtectSystem=strict
-StateDirectory=lorawan-forward
+StateDirectory=lorawan-forward lorawan-update
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes

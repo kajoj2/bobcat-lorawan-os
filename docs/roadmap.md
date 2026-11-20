@@ -71,9 +71,8 @@ Install (done 2026-11-20, docs/flashing.md, "Install onto the eMMC"):
 - `bobcat-emmc` (meta-bobcat) with a page on the panel: eMMC backups (essentials with only used blocks, or a full
   raw copy) and an install that writes idbloader, U-Boot and an A/B layout (`system_a`, `system_b`, `data` on
   `/var/lib`) from the running card. U-Boot tries the card first (`boot_targets=mmc1 mmc0`), so a card still wins.
-- Still open: A/B updates themselves (RAUC is the candidate; the update decision in docs/architecture.md comes
-  first): `system_b` is empty until then, and a RAUC image needs the `data` mount in its own fstab. The root file
-  system could become read-only.
+- A/B updates with RAUC from the panel (docs/updates.md), written 2026-11-20; board test pending. Still open: a
+  read-only root file system.
 
 Local history:
 - ChirpStack keeps only recent frames. For days/months of sensor values on the gateway itself: decoded uplinks

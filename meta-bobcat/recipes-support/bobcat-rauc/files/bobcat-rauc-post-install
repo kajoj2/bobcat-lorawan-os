@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# RAUC post-install handler (system.conf): copies what makes this gateway itself from the running system to the
+# slot just written, which holds a fresh image. Everything else of the gateway's state is on the data partition
+# (/var/lib), which both slots share. docs/updates.md.
+set -eu
+
+# Files kept across updates: identity (machine-id: DHCP and journal; SSH host keys) and the Wi-Fi network.
+KEEP="/etc/machine-id /etc/wpa_supplicant/wpa_supplicant-wlan0.conf"
+
+# An environment variable by name (busybox has no printenv)
+env_of() { awk -v n="$1" 'BEGIN { print ENVIRON[n] }'; }
+
+mnt=$(mktemp -d /run/bobcat-rauc.XXXXXX)
+trap 'umount "$mnt" 2>/dev/null || true; rmdir "$mnt"' EXIT
+
+# RAUC passes the slots it wrote as numbers in RAUC_TARGET_SLOTS, each with RAUC_SLOT_CLASS_<n> and _DEVICE_<n>.
+for i in ${RAUC_TARGET_SLOTS:-}; do
+    case $i in *[!0-9]*|'') continue ;; esac
+    class=$(env_of "RAUC_SLOT_CLASS_$i")
+    dev=$(env_of "RAUC_SLOT_DEVICE_$i")
+    if [ "$class" != rootfs ] || [ -z "$dev" ]; then
+        continue
+    fi
+    mount "$dev" "$mnt"
+    for f in $KEEP /etc/ssh/ssh_host_*; do
+        [ -f "$f" ] || continue
+        mkdir -p "$mnt$(dirname "$f")"
+        cp -p "$f" "$mnt$f"
+    done
+    [ ! -d "$mnt/etc/wpa_supplicant" ] || chmod 700 "$mnt/etc/wpa_supplicant"
+    # SSH keys that may log in: the new image's (its builder's) plus the ones this gateway has now
+    if [ -f /root/.ssh/authorized_keys ]; then
+        mkdir -p "$mnt/root/.ssh"
+        chmod 700 "$mnt/root/.ssh"
+        touch "$mnt/root/.ssh/authorized_keys"
+        while IFS= read -r key; do
+            [ -n "$key" ] || continue
+            grep -qxF "$key" "$mnt/root/.ssh/authorized_keys" || printf '%s\n' "$key" >> "$mnt/root/.ssh/authorized_keys"
+        done < /root/.ssh/authorized_keys
+        chmod 600 "$mnt/root/.ssh/authorized_keys"
+    fi
+    sync
+    umount "$mnt"
+    echo "bobcat-rauc: settings carried over to $dev"
+done

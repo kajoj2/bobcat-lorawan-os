@@ -7,8 +7,14 @@
 - [kas](https://kas.readthedocs.io/) 4.x: `pip install kas`. `kas-container` runs the build in the official
   kas image and needs only Docker or Podman on the host.
 
+Once, before the first build: the keys that sign system updates (docs/updates.md). They stay on your machine,
+next to the kas build directory; keep them, a gateway only takes updates signed with the keys its image was built
+with.
+
 ```sh
+tools/rauc-keys.sh ../rauc-keys           # from the repository; kas-container: inside its work directory
 kas-container build kas/bobcat-g285.yml
+kas-container build kas/bobcat-g285.yml --target lorawan-gateway-bundle   # the update bundle for the panel
 ```
 
 A first build compiles the toolchain, Rust, Clang (for bindgen), Node.js (for the ChirpStack web interface) and the
@@ -20,6 +26,7 @@ Output in `build/tmp/deploy/images/bobcat-g285/`:
 |---|---|
 | `lorawan-gateway-image-bobcat-g285.rootfs.wic.xz` | SD card image |
 | `lorawan-gateway-image-bobcat-g285.rootfs.wic.bmap` | block map for `bmaptool` |
+| `lorawan-gateway-bundle-bobcat-g285.raucb` | update bundle for the panel's "System update" (with `--target lorawan-gateway-bundle`) |
 | `idbloader.img`, `u-boot.itb` | boot loader parts (already inside the .wic) |
 | `rk3566-bobcat-g285.dtb` | device tree (also in the image's `/boot`) |
 

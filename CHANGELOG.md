@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- System updates (A/B with RAUC): U-Boot chooses between `system_a` and `system_b` with a boot counter and falls back
+  to the old slot; `lorawan-gateway-bundle` builds a signed update; the panel's "System update" card uploads and
+  installs it (ChirpStack login). Keys per builder (`tools/rauc-keys.sh`). docs/updates.md.
+
 - Community networks: `chirpstack-udp-forwarder` 4.3.1 forwards frames to The Things Network or any Semtech UDP
   server next to the local ChirpStack; servers chosen on the panel (card "Community networks", no login yet),
   off by default (docs/forwarding.md).

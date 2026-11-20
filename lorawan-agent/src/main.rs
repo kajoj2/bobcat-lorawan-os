@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //! lorawan-agent: the gateway's own status service.
 //!
-//!   lorawan-agent serve      web panel on port 80 (with the forwarding and eMMC pages), LED status
+//!   lorawan-agent serve      web panel on port 80 (with the forwarding, update and eMMC pages), LED status
 //!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
@@ -18,6 +18,7 @@ mod register;
 mod status;
 mod storage;
 mod sys;
+mod update;
 
 use http::{Request, Response};
 use radio::{now, Radio};
@@ -115,6 +116,7 @@ fn serve(args: &[String]) -> ExitCode {
     }));
     let auth = auth::Auth::new(&api);
     let tracker = forward::Tracker::default();
+    let updating: update::Shared = Default::default();
     let route = move |req: &Request| -> Response {
         let status = || {
             let system = {
@@ -142,6 +144,21 @@ fn serve(args: &[String]) -> ExitCode {
             ),
             // No login for now (owner's choice): the card only warns while ChirpStack has admin/admin.
             (false, "/api/forward") => forward::save(&req.body),
+            (true, "/api/update") => {
+                Response::new(200, "application/json", update::info_json(&updating))
+            }
+            // Installing a system is full control over the gateway: always behind the ChirpStack login.
+            (_, p) if p.starts_with("/api/update/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/update/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (false, "upload") => update::upload(req, &updating),
+                    (false, "reboot") => update::reboot(&updating),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
             (true, "/api/storage") => Response::new(200, "application/json", storage::info_json()),
             (_, p) if p.starts_with("/api/storage/") => {
                 if let Some(denied) = login_required(&auth, req) {

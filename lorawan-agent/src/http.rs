@@ -6,19 +6,25 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 const MAX_CONNECTIONS: usize = 16;
 /// Request line, headers and body together; the panel only ever sends small forms.
 const MAX_REQUEST: u64 = 16384;
+/// Requests whose body is read by the route itself, as a stream (an update bundle of a few hundred MB).
+const STREAMED: [&str; 1] = ["/api/update/upload"];
+const MAX_STREAMED: u64 = 1 << 30;
 
 pub struct Request {
     pub method: String,
     pub path: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// The body of a STREAMED request, not read yet (Content-Length bytes at most).
+    pub upload: Option<Mutex<Box<dyn Read + Send>>>,
+    pub upload_len: u64,
 }
 
 impl Request {
@@ -113,6 +119,7 @@ fn write_response(stream: &mut TcpStream, r: Response, head_only: bool) -> io::R
 
 fn read_request(stream: &TcpStream) -> io::Result<Request> {
     let mut reader = BufReader::new(stream.try_clone()?).take(MAX_REQUEST);
+    // (the limit covers the head and a small body; a streamed body gets its own below)
     let mut line = String::new();
     reader.read_line(&mut line)?;
     let mut headers = Vec::new();
@@ -132,11 +139,26 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
         path: target.split('?').next().unwrap_or("/").to_string(),
         headers,
         body: Vec::new(),
+        upload: None,
+        upload_len: 0,
     };
     if let Some(len) = req
         .header("content-length")
         .and_then(|v| v.parse::<u64>().ok())
     {
+        if req.method == "POST" && STREAMED.contains(&req.path.as_str()) {
+            if len > MAX_STREAMED {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "upload too large",
+                ));
+            }
+            // The rest of the stream, buffered bytes included, up to the announced length.
+            reader.set_limit(len);
+            req.upload = Some(Mutex::new(Box::new(reader)));
+            req.upload_len = len;
+            return Ok(req);
+        }
         if len > MAX_REQUEST {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -323,6 +345,13 @@ mod tests {
                     "/x" => Response::new(200, "text/plain", "hello"),
                     "/post" => Response::new(200, "text/plain", r.body.clone())
                         .with_header("X-Auth", r.header("authorization").unwrap_or("-")),
+                    "/api/update/upload" => {
+                        let mut got = Vec::new();
+                        if let Some(u) = r.upload.as_ref() {
+                            u.lock().unwrap().read_to_end(&mut got).unwrap();
+                        }
+                        Response::new(200, "text/plain", format!("{} {}", r.upload_len, got.len()))
+                    }
                     "/stream" => Response::streamed(
                         "text/plain",
                         Box::new(|w: &mut dyn Write| w.write_all(b"streamed")),
@@ -347,6 +376,21 @@ mod tests {
         .unwrap();
         assert_eq!((r.status, r.body.as_slice()), (200, &b"confirm=ERASE"[..]));
         assert_eq!(r.header("x-auth"), Some("Basic eA=="));
+        // A body larger than MAX_REQUEST reaches the route as a stream, whole
+        let big = vec![7u8; 100_000];
+        let r = request(
+            &addr,
+            "POST",
+            "/api/update/upload",
+            &[],
+            &big,
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        assert_eq!((r.status, r.body.as_slice()), (200, &b"100000 100000"[..]));
+        // ... and anywhere else it is refused
+        let r = request(&addr, "POST", "/post", &[], &big, Duration::from_secs(5)).unwrap();
+        assert_eq!(r.status, 400);
         let r = request(&addr, "GET", "/stream", &[], b"", Duration::from_secs(2)).unwrap();
         assert_eq!((r.status, r.body.as_slice()), (200, &b"streamed"[..]));
         assert_eq!(r.header("content-length"), None);
