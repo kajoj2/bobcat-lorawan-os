@@ -23,8 +23,10 @@ SX1302 ── Concentratord ─ZeroMQ──┤
    - leave "Require authenticated connection" off (Semtech UDP has no authentication).
    TTN drops frames from gateways it does not know.
 2. **Panel** (`http://<gateway>/`), card "Community networks", "Choose networks": tick the TTN cluster you
-   registered on (or enter another server as `host:port`), Save. The forwarder starts; within about 30 s the server shows as "connected", and the gateway as connected in the TTN
-   Console.
+   registered on (or enter another server as `host:port`), Save. The forwarder starts; within about 30 s the
+   server shows as "connected" on the panel, and the gateway as connected in the TTN Console. Check the Console:
+   TTN answers the keepalives of any gateway, so "connected" on the panel alone does not mean TTN takes its
+   frames (it drops those of a gateway it does not know).
 
 To turn it off, untick everything and Save.
 
@@ -37,8 +39,8 @@ To turn it off, untick everything and Save.
 - Each network keeps only its own devices' frames, by DevAddr and JoinEUI; TTN passes frames of other networks on
   through Packet Broker. Your own devices on the local ChirpStack stay private to it: their payloads are encrypted
   with keys only ChirpStack has, so a public network sees metadata (DevAddr, signal strength) and cannot read them.
-- The panel shows per server: state (connected when it answered a keepalive in the last 45 s), uplinks sent and
-  acknowledged, downlinks received, time of the last answer. Counters are the forwarder's own (Prometheus on
+- The panel shows per server: state (connected when it answered a keepalive in the last 45 s), uplinks sent,
+  downlinks received, time of the last answer. Counters are the forwarder's own (Prometheus on
   `127.0.0.1:9800`), since it last started.
 
 ## Files
