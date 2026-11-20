@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
 /*
  * U-Boot additions to the board's Linux device tree (rk3566-bobcat-g285.dts,
- * built by U-Boot from the same file). EXPERIMENTAL, see
- * docs/experimental-boot-firmware.md.
+ * built by U-Boot from the same file). See docs/boot-firmware.md.
  */
 
 #include "rk356x-u-boot.dtsi"

@@ -4,18 +4,12 @@
 Features planned on top of the gateway, each with what it needs, the steps and the open points. Order is a
 suggestion: 7 and 5 make the gateway easier to use, 6 makes it last, 4 and 9 are for later.
 
-## Experimental: boot firmware (branch `experimental/boot-firmware`)
+## Done: boot firmware
 
-Not on main and not tested on a board yet. The branch has three switchable changes to the boot chain, described
-with their tests in `docs/experimental-boot-firmware.md` on that branch:
-
-- U-Boot with the G285's own device tree: status LED from power-on, the button held at power-on shows the SD card
-  and eMMC as USB disks (write an image without taking the card out); groundwork for item 6.
-- BL31 built from upstream TF-A sources instead of Rockchip's blob.
-- LPDDR4X at 1332 MHz instead of the factory 1056 MHz: above what the board was set up for, only worth it for
-  memory-bound work, never the default without an overnight memory test.
-
-Each part moves to main on its own once it has passed its tests on a board; the DDR clock probably stays opt-in.
+On main since 2026-11-19 (docs/boot-firmware.md, with the board tests): U-Boot with the G285's own device tree
+(status LED from power-on; the button held at power-on shows the SD card and eMMC as USB disks), BL31 from upstream
+TF-A sources instead of Rockchip's blob, and LPDDR4X at 1332 MHz (passed an 8-hour memory test). Each can be
+switched back on its own.
 
 ## 7. Front RGB LED as status
 
@@ -29,7 +23,7 @@ Steps:
 2. Done in `lorawan-agent` (docs/lorawan-agent.md): green heartbeat when the gateway stack, the radio path and
    the network are fine, blue without network, red on a failure. Still open: a short white flash per received
    uplink.
-3. U-Boot (experimental branch): light the LED from power-on, so a board stuck before Linux shows it.
+3. Done in U-Boot: the LED is red from power-on, so a board stuck before Linux shows it.
 
 Open: which states are worth a colour; brightness at night (an option to turn the RGB LED off).
 

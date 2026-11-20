@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# EXPERIMENTAL (branch experimental/boot-firmware, docs/experimental-boot-firmware.md): run Rockchip's DDR blob at
+# docs/boot-firmware.md: run Rockchip's DDR blob at
 # BOBCAT_DDR_MHZ instead of its 1056 MHz. The RK3566 blobs in rkbin stop at 1056 MHz; the clock is changed with
 # rkbin's own ddrbin_tool (meta-rockchip's RKBIN_DDR_RECONFIGURE), everything else in the blob stays as it is.
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# EXPERIMENTAL (branch experimental/boot-firmware, docs/experimental-boot-firmware.md): a U-Boot configuration for
+# docs/boot-firmware.md: a U-Boot configuration for
 # the G285 with the board's own device tree instead of generic-rk3568_defconfig. Selected with BOBCAT_UBOOT = "board"
 # (conf/machine/bobcat-g285.conf). U-Boot builds the same .dts as the kernel; rk3566-bobcat-g285-u-boot.dtsi adds
 # what only U-Boot needs.
