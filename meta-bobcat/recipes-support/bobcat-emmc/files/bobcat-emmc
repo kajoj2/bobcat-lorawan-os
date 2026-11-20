@@ -202,7 +202,7 @@ frozen=""
 mounted=""
 cleanup() {
     rc=$?
-    [ -n "$frozen" ] && fsfreeze -u / 2>/dev/null || true
+    if [ -n "$frozen" ]; then fsfreeze -u / 2>/dev/null || true; fi
     for m in $mounted; do umount "$m" 2>/dev/null || true; done
     journalctl --flush 2>/dev/null || true
     # shellcheck disable=SC2086
@@ -288,7 +288,7 @@ EOF
     done
     sys_uuid=$(sfdisk --part-uuid "$EMMC" 2 | tr A-F a-f)
     data_uuid=$(sfdisk --part-uuid "$EMMC" 4 | tr A-F a-f)
-    [ -n "$sys_uuid" ] && [ -n "$data_uuid" ] || die "cannot read the new partitions' PARTUUIDs"
+    if [ -z "$sys_uuid" ] || [ -z "$data_uuid" ]; then die "cannot read the new partitions' PARTUUIDs"; fi
     # Root and /var/lib by PARTUUID: the SD card's names (rootfsA) must not match anything on the eMMC.
     sed -i "s|root=PARTLABEL=rootfsA|root=PARTUUID=$sys_uuid|" "$a/boot/extlinux/extlinux.conf"
     grep -q "root=PARTUUID=$sys_uuid" "$a/boot/extlinux/extlinux.conf" || die "extlinux.conf not updated"
