@@ -8,7 +8,13 @@ Wants=chirpstack-concentratord.service network-online.target
 ConditionPathExists=/var/lib/lorawan-forward/servers.toml
 
 [Service]
-ExecStart=/usr/bin/chirpstack-udp-forwarder -c /etc/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml -c /var/lib/lorawan-forward/servers.toml
+# The forwarder asks Concentratord for the gateway ID once at start and aborts if no answer comes within 100 ms.
+# Concentratord binds its command socket only after the concentrator has started (a few seconds after boot), so
+# wait for the socket first. The wait is part of the main process, not an ExecStartPre, so the panel's
+# `systemctl restart` returns at once even while Concentratord is down.
+ExecStart=/bin/sh -c 'until [ -S /run/chirpstack-concentratord/command ]; do sleep 1; done; \
+    exec /usr/bin/chirpstack-udp-forwarder -c /etc/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml \
+    -c /var/lib/lorawan-forward/servers.toml'
 # It exits when a server name does not resolve at start (no network yet); try again.
 Restart=always
 RestartSec=10
