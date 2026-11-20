@@ -49,6 +49,7 @@ item.
    `tools/cargo-crates-inc.py https://raw.githubusercontent.com/chirpstack/<repo>/v<version>/Cargo.lock <recipe> > <recipe>-crates.inc`
    (or `bitbake -c update_crates <recipe>` on a build host).
 3. Update `LIC_FILES_CHKSUM` if the license file changed.
+4. `tools/check-crates-inc.sh` checks every crate list against its recipe's `SRCREV` (CI runs it too).
 
 ## Checking the device tree without a build
 
@@ -56,3 +57,19 @@ item.
 tools/check-dts.sh             # sparse-clones the matching Linux tag (~30 MB) into a temp directory
 tools/check-dts.sh ~/src/linux # or use an existing kernel tree
 ```
+
+## What CI builds
+
+GitHub's hosted runners (4 vCPU, a few tens of GB of disk, 6 h per job) cannot build the whole image: ChirpStack
+needs the Rust toolchain, and a build from scratch takes an hour on 24 threads. So CI splits the work:
+
+| Workflow | When | What |
+|---|---|---|
+| `ci` | every push and pull request | REUSE, device trees (`dtc`), shellcheck, oelint-adv, lorawan-agent tests and clippy, crate lists against `Cargo.lock`, `kas dump`, `bitbake --dry-run` of the image and the bundle |
+| `build` | changes to `meta-bobcat/`, `kas/`, the distro config or libloragw; weekly | `kas/ci-board.yml`: cross toolchain, kernel with our device tree, U-Boot with TF-A, and our small recipes up to package QA |
+
+`build` keeps its shared state in the GitHub Actions cache, keyed on the lock file: a run with an unchanged lock
+reuses the toolchain and builds only what changed; a lock change starts over (about 2 h). Pull requests read the
+cache but never write it. The image, the update bundle and the QEMU tests (docs/testing.md) are built on a
+maintainer's build host before a release.
+

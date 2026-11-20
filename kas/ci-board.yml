@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+# SPDX-License-Identifier: MIT
+#
+# The part of the board build that fits a hosted CI runner (.github/workflows/build.yml): the cross toolchain, the
+# kernel with our device tree and patches, U-Boot with TF-A and the DDR blob, and our small C and shell recipes up to
+# their package QA. Nothing in Rust (ChirpStack needs the Rust toolchain, hours on 4 cores) and no image.
+#
+#   kas build kas/ci-board.yml
+header:
+  version: 14
+  includes:
+    - kas/bobcat-g285.yml
+    # kas only applies the lock next to the file named on the command line.
+    - kas/bobcat-g285.lock.yml
+
+target:
+  - virtual/kernel
+  - virtual/bootloader
+  # :do_package_qa compiles, installs, packages and QA-checks the recipe without building its runtime dependencies
+  # (bobcat-rauc would pull RAUC, systemd and glib in, bobcat-emmc e2fsprogs and more).
+  - libloragw-sx1302:do_package_qa
+  - bobcat-emmc:do_package_qa
+  - bobcat-rauc:do_package_qa
+  - bobcat-wifibt-firmware:do_package_qa
+
+local_conf_header:
+  ci: |
+    # Shallow clones: the kernel's full history alone is several GB, more than the runner's disk can spare.
+    BB_GIT_SHALLOW = "1"

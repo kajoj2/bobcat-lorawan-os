@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT
+# Builds the part of the board's firmware that fits a hosted runner (kas/ci-board.yml): cross toolchain, kernel with
+# our device tree and patches, U-Boot with TF-A, and our small C and shell recipes. The full image (with ChirpStack in
+# Rust) is built and tested on the maintainers' build hosts.
+#
+# Runs on changes to the board layer, the distro config or the kas files, weekly (new upstream commits within the
+# pinned revisions cannot appear, but a fetch can break), and from the updates workflow on its lock PRs.
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build.yml
+      - kas/**
+      - meta-bobcat/**
+      - meta-lorawan/conf/**
+      - meta-lorawan/recipes-lorawan/libloragw-sx1302/**
+  pull_request:
+    paths:
+      - .github/workflows/build.yml
+      - kas/**
+      - meta-bobcat/**
+      - meta-lorawan/conf/**
+      - meta-lorawan/recipes-lorawan/libloragw-sx1302/**
+  schedule:
+    - cron: "41 3 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  board:
+    name: board firmware (toolchain, kernel, U-Boot, small recipes)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      # The runner has ~14 GB free; a toolchain, kernel and U-Boot build needs about 40 GB.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
+          sudo docker image prune --all --force > /dev/null
+          df -h /
+
+      - uses: actions/checkout@v5
+
+      - name: Set up kas-container
+        run: |
+          # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; bitbake needs them.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          curl -fsSL -o "$RUNNER_TEMP/kas-container" https://raw.githubusercontent.com/siemens/kas/5.4/kas-container
+          chmod +x "$RUNNER_TEMP/kas-container"
+          echo "KAS_WORK_DIR=$RUNNER_TEMP/kas" >> "$GITHUB_ENV"
+
+      # The board's rauc-conf refuses to parse without an update CA certificate (docs/updates.md). These keys exist
+      # only for this job.
+      - name: Throwaway update keys
+        run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
+
+      # Shared state from earlier runs with the same lock file. A lock change starts from an empty cache, which also
+      # keeps the cache from growing without bound. Only runs on main, the schedule and manual runs save it; pull
+      # requests (forks included) only read it.
+      - name: Restore shared state cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
+          key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
+          restore-keys: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-
+
+      - name: Build
+        run: '"$RUNNER_TEMP/kas-container" build kas/ci-board.yml'
+
+      - name: Save shared state cache
+        if: (success() || failure()) && github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
+          key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
+
+      - name: Build statistics
+        if: success() || failure()
+        run: |
+          df -h /
+          du -sh "$KAS_WORK_DIR"/build/sstate-cache "$KAS_WORK_DIR"/build/downloads "$KAS_WORK_DIR"/build/tmp 2>/dev/null || true
+          tail -n 30 "$KAS_WORK_DIR"/build/tmp/buildstats/*/build_stats 2>/dev/null || true
