@@ -24,6 +24,7 @@ do_install() {
 
 RDEPENDS:${PN} = " \
     e2fsprogs \
+    e2fsprogs-dumpe2fs \
     e2fsprogs-e2fsck \
     e2fsprogs-mke2fs \
     e2fsprogs-resize2fs \
