@@ -48,7 +48,7 @@ loader_magic() {
 
 is_ext4() {
     # ext4 superblock magic 0xEF53 at byte 1080, little endian: "S" then octal 357
-    [ "$(dd if="$1" bs=1 skip=1080 count=2 2>/dev/null)" = "$(printf 'S\357')" ]
+    [ "$(dd if="$1" bs=1 skip=1080 count=2 2>/dev/null | tr -d '\000')" = "$(printf 'S\357')" ]
 }
 
 ext4_used() {

@@ -52,10 +52,11 @@ loader cleared first (below).
 
 ## Write a new image later
 
-Take the card out and write it again, or (built in, not tested on a board yet) without taking it out: hold the
-button on the board while connecting the 12 V supply, and connect the rear micro-USB port to a computer. Our U-Boot
-then shows the SD card and the eMMC as two USB disks; write the new image to the SD card disk as above, then
-power-cycle (docs/boot-firmware.md).
+Take the card out and write it again, or without taking it out: hold the button on the board while connecting the
+12 V supply, and connect the rear micro-USB port to a computer. Our U-Boot then shows the SD card as a USB disk
+(`ums 0 mmc 1`, tested on a board: ~6 MB/s); write the new image to it as above, then power-cycle
+(docs/boot-firmware.md). Writing an image over the card the running system booted from does not work: the
+mounted root file system keeps the card open, and the data never reaches it before the reboot.
 
 ## Install onto the eMMC
 
@@ -73,8 +74,8 @@ system onto it. From a shell the same is `bobcat-emmc` (`bobcat-emmc info`, `bob
      panel also shows a `curl` loop that fetches them all.
    - **Full raw copy**: every sector, old deleted data included. Exact, but slow (30 minutes to hours) and big
      (36 GB from a used factory eMMC).
-3. **Install**: type ERASE and start. It takes a few minutes; the gateway services pause for about a minute while
-   the system is copied. The SD card's system is copied as it is, with your settings, SSH keys, Wi-Fi and
+3. **Install**: type ERASE and start. It takes about 2 minutes (tested on a board, 2026-11-20); the gateway
+   services pause for about 25 seconds while the system is copied. The SD card's system is copied as it is, with your settings, SSH keys, Wi-Fi and
    ChirpStack data.
 4. Power off, take the card out, power on: the gateway starts from the eMMC, with our whole boot chain (DDR at
    1332 MHz).
