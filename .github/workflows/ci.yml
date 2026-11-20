@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Checks that fit a hosted runner: linters, unit tests, and bitbake parsing the layers and planning the image's task
-# graph (a dry run, nothing is built). Full image builds need far more than a hosted runner offers and run on the
-# maintainers' build hosts.
+# graph (a dry run, nothing is built). The toolchain, kernel and U-Boot are built by build.yml; full image builds need
+# far more than a hosted runner offers and run on the maintainers' build hosts (docs/building.md, "What CI builds").
 name: ci
 
 on:
@@ -47,11 +47,15 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo fmt --check
 
+      - name: Crate lists of the Rust recipes (against upstream Cargo.lock)
+        run: tools/check-crates-inc.sh
+
       - name: kas files parse
         run: |
           pipx install kas==5.4
           kas dump kas/bobcat-g285.yml > /dev/null
           kas dump kas/qemuarm64.yml > /dev/null
+          kas dump kas/ci-board.yml > /dev/null
 
   # Parses every recipe of the configured layers and resolves the targets' task graphs without running any task. Catches
   # what breaks a build in its first minute: syntax errors, renamed or removed variables, dangling bbappends, layer
