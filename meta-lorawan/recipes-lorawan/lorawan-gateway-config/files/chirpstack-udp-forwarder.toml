@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Concentratord (ZeroMQ) <-> network servers over Semtech UDP. Read together with the server list the panel
+# writes, /var/lib/lorawan-forward/servers.toml ([[udp_forwarder.servers]] entries); see docs/forwarding.md.
+
+[udp_forwarder]
+  # WARN: at INFO it logs every keepalive (each 10 s per server). The panel shows the traffic from the metrics.
+  log_level = "WARN"
+  log_to_syslog = false
+  # Counters per server (datagrams sent and acknowledged), read by the panel; localhost only.
+  metrics_bind = "127.0.0.1:9800"
+
+[concentratord]
+  event_url = "ipc:///run/chirpstack-concentratord/event"
+  command_url = "ipc:///run/chirpstack-concentratord/command"

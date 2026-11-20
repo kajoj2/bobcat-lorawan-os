@@ -79,6 +79,10 @@ pub fn units() -> Vec<&'static str> {
     if Path::new(WIFI_CONFIG).exists() {
         u.push("wpa_supplicant@wlan0");
     }
+    // Optional: only watched once the panel has a server list for it.
+    if Path::new(crate::forward::FILE).exists() {
+        u.push(crate::forward::UNIT);
+    }
     u
 }
 

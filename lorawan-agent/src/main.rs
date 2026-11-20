@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 //! lorawan-agent: the gateway's own status service.
 //!
-//!   lorawan-agent serve      web panel on port 80 (with the eMMC page), LED status (lorawan-agent.service)
+//!   lorawan-agent serve      web panel on port 80 (with the forwarding and eMMC pages), LED status
+//!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
 //!   lorawan-agent led-reset  give the LED back to the device tree's default (green heartbeat)
 
 mod auth;
+mod forward;
 mod http;
 mod led;
 mod mqtt;
@@ -112,6 +114,7 @@ fn serve(args: &[String]) -> ExitCode {
         system: sys::System::default(),
     }));
     let auth = auth::Auth::new(&api);
+    let tracker = forward::Tracker::default();
     let route = move |req: &Request| -> Response {
         let status = || {
             let system = {
@@ -132,6 +135,13 @@ fn serve(args: &[String]) -> ExitCode {
             (true, "/api/status.txt") => {
                 Response::new(200, "text/plain; charset=utf-8", status().to_text())
             }
+            (true, "/api/forward") => Response::new(
+                200,
+                "application/json",
+                forward::info_json(&tracker, auth.default_password_valid().ok()),
+            ),
+            // No login for now (owner's choice): the card only warns while ChirpStack has admin/admin.
+            (false, "/api/forward") => forward::save(&req.body),
             (true, "/api/storage") => Response::new(200, "application/json", storage::info_json()),
             (_, p) if p.starts_with("/api/storage/") => {
                 if let Some(denied) = login_required(&auth, req) {

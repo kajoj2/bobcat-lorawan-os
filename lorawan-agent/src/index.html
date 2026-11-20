@@ -64,8 +64,10 @@ svg line { stroke: var(--line); }
 .files { margin: 6px 0 10px; padding-left: 18px; }
 .files li { margin: 2px 0; }
 a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
-button, input[type=text] { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+button, input[type=text], textarea { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--card); color: var(--text); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; cursor: pointer; }
+label.opt { display: block; margin: 4px 0; }
 button.danger { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 600; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 details summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 8px 0; }
@@ -92,6 +94,7 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card"><h2>System</h2><dl id="system"></dl></section>
   <section class="card wide"><h2>Last frames</h2><div class="scroll" id="frames"></div></section>
   <section class="card wide"><h2>Network</h2><div id="net"></div></section>
+  <section class="card wide" id="forward-card" hidden><h2>Community networks</h2><div id="forward"></div></section>
   <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
 <footer id="foot"></footer>
@@ -104,6 +107,7 @@ const ago = (now, t) => { const s = Math.max(0, now - t); return s < 90 ? `${s} 
 const dur = s => { const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
   return d ? `${d} d ${h} h` : h ? `${h} h ${m} min` : `${m} min`; };
 const mib = kb => `${Math.round(kb / 1024)} MiB`;
+let gatewayId = "";
 const LEVEL = { ok: ["ok", "All good"], starting: ["info", "Starting"], "no-network": ["info", "No network"], fault: ["bad", "Problem"] };
 
 $("cs").href = `${location.protocol}//${location.hostname}:8080/`;
@@ -114,6 +118,7 @@ function render(d) {
     (d.health.problems.length ? `<ul>${d.health.problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : "") + `</div>`;
 
   const g = d.gateway, s = d.system, r = d.radio;
+  gatewayId = g.id || "";
   $("host").textContent = s.hostname || "LoRaWAN gateway";
   document.title = `${s.hostname} · LoRaWAN gateway`;
   $("os").textContent = `${s.os} · Linux ${s.kernel}`;
@@ -220,6 +225,71 @@ async function tick() {
 }
 tick();
 setInterval(tick, 5000);
+
+// --- Community networks: forwarding to The Things Network and others (chirpstack-udp-forwarder) -----------------
+const FSTATE = { connected: ["ok", "connected"], starting: ["info", "starting"], "no-answer": ["bad", "no answer"], stopped: ["bad", "forwarder not running"] };
+let forwardTimer = null, forwardEditing = false;
+
+function renderForward(d) {
+  $("forward-card").hidden = false;
+  if (forwardEditing) return; // do not throw away what is being typed
+  const on = d.servers.map(x => x.server);
+  let h = d.default_password ? `<div class="warnbox"><b>ChirpStack still has its default password (admin/admin).</b> ` +
+    `Change it in the <a class="dl" href="${esc($("cs").href)}">ChirpStack web interface</a> (top right, admin → Change password). ` +
+    `Until then anyone on your network can log in there.</div>` : "";
+  h += `<p>Also send the frames this gateway hears to a community network, so people nearby can use it for their own ` +
+    `sensors. The local ChirpStack keeps getting every frame; each network only takes its own devices' frames ` +
+    `(The Things Network also passes others on through Packet Broker).</p>`;
+  if (d.servers.length) {
+    h += `<div class="scroll"><table><tr><th>Server</th><th>State</th><th class="r">Uplinks sent</th><th class="r">Acknowledged</th><th class="r">Downlinks</th><th>Last answer</th></tr>` +
+      d.servers.map(x => { const [c, l] = FSTATE[x.state] || ["warn", x.state];
+        return `<tr><td>${esc(x.label || x.server)}${x.label ? `<br><span class="note mono">${esc(x.server)}</span>` : ""}</td>` +
+          `<td><span class="st ${c}"></span>${l}</td><td class="r">${x.uplinks}</td><td class="r">${x.uplink_acks}</td><td class="r">${x.downlinks}</td>` +
+          `<td>${x.last_answer ? ago(d.now, x.last_answer) : "–"}</td></tr>`; }).join("") + `</table></div>` +
+      `<p class="note">Counts since the forwarder started. “No answer” usually means the gateway is not registered on that network yet (see below), or UDP port 1700 is blocked.</p>`;
+  } else {
+    h += `<p class="note">Off: nothing leaves the gateway.</p>`;
+  }
+  const custom = on.filter(x => !d.presets.some(p => p.server === x));
+  h += `<details${d.servers.length ? "" : " open"}><summary>Choose networks</summary>` +
+    d.presets.map(p => `<label class="opt"><input type="checkbox" name="fwd" value="${esc(p.server)}"${on.includes(p.server) ? " checked" : ""}> ${esc(p.label)}</label>`).join("") +
+    `<p><label>Other servers (Semtech UDP, host:port, one per line):<br><textarea id="fwd-custom" rows="2" cols="40" class="mono">${esc(custom.join("\n"))}</textarea></label></p>` +
+    `<p><button class="primary" id="fwd-save">Save</button> <span class="note" id="fwd-msg"></span></p>` +
+    `<p><b>Register the gateway on The Things Network</b> (once, in the <a class="dl" href="https://console.cloud.thethings.network/" target="_blank" rel="noopener">TTN Console</a>, pick the cluster chosen above): ` +
+    `Gateways → Register gateway, Gateway EUI <span class="mono">${esc(gatewayId || "(see Gateway above)")}</span>, ` +
+    `frequency plan for your region (Europe: “Europe 863-870 MHz (SF9 for RX2 - recommended)”). Frames from an unregistered gateway are dropped.</p>` +
+    `</details>`;
+  const open = document.querySelector("#forward details")?.open;
+  $("forward").innerHTML = h;
+  if (open !== undefined) document.querySelector("#forward details").open = open;
+  const editing = () => { forwardEditing = true; };
+  document.querySelectorAll("#forward input, #forward textarea").forEach(x => x.addEventListener("input", editing));
+  $("fwd-save").addEventListener("click", saveForward);
+}
+
+async function saveForward() {
+  const msg = $("fwd-msg"), body = new URLSearchParams();
+  document.querySelectorAll("#forward input[name=fwd]:checked").forEach(x => body.append("server", x.value));
+  $("fwd-custom").value.split(/[\s,]+/).filter(Boolean).forEach(x => body.append("server", x));
+  $("fwd-save").disabled = true;
+  try {
+    const r = await fetch("api/forward", { method: "POST", body });
+    msg.textContent = await r.text();
+    if (r.ok) forwardEditing = false;
+  } catch (e) { msg.textContent = e.message; }
+  if ($("fwd-save")) $("fwd-save").disabled = false;
+  if (!forwardEditing) setTimeout(forward, 1500);
+}
+
+async function forward() {
+  clearTimeout(forwardTimer);
+  try {
+    const r = await fetch("api/forward", { cache: "no-store" });
+    if (r.ok) renderForward(await r.json());
+  } catch (e) { /* the status card already shows a dead gateway */ }
+  forwardTimer = setTimeout(forward, 10000);
+}
+forward();
 
 // --- Internal storage (eMMC): backups and install ---------------------------------------------------------------
 const gb = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1e6))} MB`;

@@ -11,6 +11,21 @@ On main since 2026-11-19 (docs/boot-firmware.md, with the board tests): U-Boot w
 TF-A sources instead of Rockchip's blob, and LPDDR4X at 1332 MHz (passed an 8-hour memory test). Each can be
 switched back on its own.
 
+## 10. Community networks
+
+Share the gateway with public networks next to the local ChirpStack (docs/forwarding.md).
+
+Steps:
+1. Semtech UDP to The Things Network or any UDP server, chosen on the panel (chirpstack-udp-forwarder 4.3.1).
+   Written 2026-11-20; board test with TTN still to do.
+2. LoRa Basics Station (TLS, API key) for TTN instead of UDP: needs a Basics Station client for Concentratord's
+   ZeroMQ API (none exists; Semtech's `station` drives the radio itself, which Concentratord already owns): the
+   protocol's timing (`xtime`, RX1/RX2 choice) is the hard part.
+3. Helium: the Helium gateway (`gateway-rs`) takes Semtech UDP locally and signs with a key in the ATECC608 (slot 0
+   holds the Helium key; using it is read-only, see item 4). Only if the Helium network is still worth it.
+
+Open: a white LED flash per forwarded frame (with item 7); a per-network JoinEUI/DevAddr filter, if anyone needs one.
+
 ## 7. Front RGB LED as status
 
 The front RGB LED is the board's only LED: GPIO4_A0 green, GPIO4_A1 blue, GPIO4_A2 red, active high (checked on a

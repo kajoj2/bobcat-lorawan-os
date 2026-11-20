@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 SUMMARY = "Configuration that turns the services into one LoRaWAN gateway"
-DESCRIPTION = "Concentratord board/region configuration, MQTT Forwarder and ChirpStack configuration, first-boot \
+DESCRIPTION = "Concentratord board/region configuration, MQTT and UDP Forwarder and ChirpStack configuration, first-boot \
 secret generation, wired and Wi-Fi networking over DHCP (online when either is), key-only SSH and the hardware watchdog."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
@@ -14,6 +14,7 @@ SRC_URI = " \
     file://chirpstack.toml \
     file://concentratord.toml \
     file://chirpstack-mqtt-forwarder.toml \
+    file://chirpstack-udp-forwarder.toml \
     file://lorawan-secrets.sh \
     file://lorawan-secrets.service \
     file://80-wired.network \
@@ -45,10 +46,12 @@ do_install() {
             -e 's|@REGION_ID@|${LORAWAN_REGION_ID}|g' "$1"
     }
 
-    install -d ${D}${sysconfdir}/chirpstack ${D}${sysconfdir}/chirpstack-concentratord ${D}${sysconfdir}/chirpstack-mqtt-forwarder
+    install -d ${D}${sysconfdir}/chirpstack ${D}${sysconfdir}/chirpstack-concentratord ${D}${sysconfdir}/chirpstack-mqtt-forwarder \
+        ${D}${sysconfdir}/chirpstack-udp-forwarder
     subst ${UNPACKDIR}/chirpstack.toml > ${D}${sysconfdir}/chirpstack/chirpstack.toml
     subst ${UNPACKDIR}/concentratord.toml > ${D}${sysconfdir}/chirpstack-concentratord/concentratord.toml
     subst ${UNPACKDIR}/chirpstack-mqtt-forwarder.toml > ${D}${sysconfdir}/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml
+    install -m 0644 ${UNPACKDIR}/chirpstack-udp-forwarder.toml ${D}${sysconfdir}/chirpstack-udp-forwarder/
     chmod 0644 ${D}${sysconfdir}/chirpstack/*.toml ${D}${sysconfdir}/chirpstack-concentratord/*.toml \
         ${D}${sysconfdir}/chirpstack-mqtt-forwarder/*.toml
     # Region and channel plan straight from Concentratord's examples (installed by chirpstack-concentratord)
@@ -84,6 +87,7 @@ CONFFILES:${PN} = " \
     ${sysconfdir}/chirpstack/chirpstack.toml \
     ${sysconfdir}/chirpstack-concentratord/concentratord.toml \
     ${sysconfdir}/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml \
+    ${sysconfdir}/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml \
 "
-RDEPENDS:${PN} = "chirpstack chirpstack-concentratord chirpstack-mqtt-forwarder"
+RDEPENDS:${PN} = "chirpstack chirpstack-concentratord chirpstack-mqtt-forwarder chirpstack-udp-forwarder"
 RRECOMMENDS:${PN} = "${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'wpa-supplicant', '', d)}"

@@ -19,6 +19,7 @@ IMAGE_INSTALL += " \
     chirpstack \
     chirpstack-concentratord \
     chirpstack-mqtt-forwarder \
+    chirpstack-udp-forwarder \
     libloragw-sx1302-utils \
     mosquitto \
     mosquitto-clients \

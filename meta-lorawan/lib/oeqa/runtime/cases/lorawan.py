@@ -145,3 +145,45 @@ class LorawanGatewayTest(OERuntimeTestCase):
         status, output = self.target.run(
             "readlink -f /var/log | grep -q '^/var/volatile/' && grep -q ' /var/volatile tmpfs ' /proc/mounts")
         self.assertEqual(status, 0, msg=self.target.run("ls -ld /var/log; grep volatile /proc/mounts")[1])
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_udp_forwarder_off_by_default(self):
+        # Installed and enabled, but skipped until the panel writes a server list (docs/forwarding.md).
+        status, output = self.target.run("chirpstack-udp-forwarder --version")
+        self.assertEqual(status, 0, msg=output)
+        status, output = self.target.run("test -e /var/lib/lorawan-forward/servers.toml")
+        self.assertNotEqual(status, 0, msg="a server list exists on a fresh image")
+        status, output = self.target.run(
+            "systemctl show -p UnitFileState -p ConditionResult -p ActiveState chirpstack-udp-forwarder")
+        props = dict(l.split("=", 1) for l in output.splitlines() if "=" in l)
+        self.assertEqual(props.get("UnitFileState"), "enabled", msg=output)
+        self.assertEqual(props.get("ConditionResult"), "no", msg=output)
+        self.assertEqual(props.get("ActiveState"), "inactive", msg=output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_chirpstack_web"])
+    def test_forward_panel(self):
+        status, output = self.wait_for("wget -q -O - http://127.0.0.1/api/forward")
+        self.assertEqual(status, 0, msg=self.journal("lorawan-agent"))
+        self.assertIn('"servers":[]', output)
+        self.assertIn("eu1.cloud.thethings.network:1700", output)
+        # Fresh image: ChirpStack still has admin/admin, which the card reports.
+        self.assertIn('"default_password":true', output)
+        # Turn forwarding on (no login yet): the list is written and the unit started. Without a concentrator in
+        # QEMU the forwarder cannot get the gateway ID and keeps restarting; only the file and the start are checked.
+        status, output = self.target.run(
+            "wget -q -O - --post-data 'server=127.0.0.1%3A1700&server=bad host' http://127.0.0.1/api/forward 2>&1")
+        self.assertNotEqual(status, 0, msg="an invalid server was accepted: %s" % output)
+        status, output = self.target.run(
+            "wget -q -O - --post-data 'server=127.0.0.1%3A1700' http://127.0.0.1/api/forward")
+        self.assertEqual(status, 0, msg="%s\n%s" % (output, self.journal("lorawan-agent")))
+        status, output = self.target.run("cat /var/lib/lorawan-forward/servers.toml")
+        self.assertIn('server = "127.0.0.1:1700"', output)
+        status, output = self.target.run("systemctl show -p ConditionResult --value chirpstack-udp-forwarder")
+        self.assertEqual(output.strip(), "yes")
+        # And off again: file gone, unit stopped.
+        status, output = self.target.run("wget -q -O - --post-data '' http://127.0.0.1/api/forward")
+        self.assertEqual(status, 0, msg=output)
+        status, output = self.target.run("test -e /var/lib/lorawan-forward/servers.toml")
+        self.assertNotEqual(status, 0, msg="the list is still there after turning forwarding off")
+        status, output = self.target.run("systemctl is-active chirpstack-udp-forwarder")
+        self.assertEqual(output.strip(), "inactive", msg=output)

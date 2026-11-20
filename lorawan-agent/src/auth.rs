@@ -57,7 +57,7 @@ impl Auth {
         }
     }
 
-    fn default_password_valid(&self) -> Result<bool, String> {
+    pub fn default_password_valid(&self) -> Result<bool, String> {
         let mut cached = self.default_pw.lock().unwrap();
         if let Some((v, at)) = *cached {
             if at.elapsed() < DEFAULT_CHECK {

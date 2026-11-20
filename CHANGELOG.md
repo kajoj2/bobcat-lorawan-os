@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- Community networks: `chirpstack-udp-forwarder` 4.3.1 forwards frames to The Things Network or any Semtech UDP
+  server next to the local ChirpStack; servers chosen on the panel (card "Community networks", no login yet),
+  off by default (docs/forwarding.md).
+
 First version, written before the first board arrived. Builds; not booted yet.
 
 - Machine `bobcat-g285` (Bobcat Miner 300, G285, RK3566) on meta-rockchip, Linux 6.18, U-Boot 2026.01.

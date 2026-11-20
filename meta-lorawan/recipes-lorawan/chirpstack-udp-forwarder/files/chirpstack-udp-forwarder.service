@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=ChirpStack UDP Forwarder (to community networks such as The Things Network)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/forwarding.md
+After=chirpstack-concentratord.service network-online.target
+Wants=chirpstack-concentratord.service network-online.target
+# The server list is written by the panel (lorawan-agent); without one, nothing is forwarded.
+ConditionPathExists=/var/lib/lorawan-forward/servers.toml
+
+[Service]
+ExecStart=/usr/bin/chirpstack-udp-forwarder -c /etc/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml -c /var/lib/lorawan-forward/servers.toml
+# It exits when a server name does not resolve at start (no network yet); try again.
+Restart=always
+RestartSec=10
+# Root for the same reason as chirpstack-mqtt-forwarder: Concentratord's IPC sockets belong to root.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -36,6 +36,8 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
 
 - **Linux 6.18** (linux-yocto) with a device tree for the board written for mainline, **U-Boot 2026.01**.
 - **ChirpStack 4.20** (SQLite backend, no PostgreSQL), **Concentratord 4.7.1**, **MQTT Forwarder 4.6.1**.
+- Optional, off by default: **UDP Forwarder 4.3.1** shares the gateway with [The Things Network](https://www.thethingsnetwork.org/)
+  or another community network next to the local ChirpStack, set on the web panel: [docs/forwarding.md](docs/forwarding.md).
 - systemd, systemd-networkd (DHCP on Ethernet), OpenSSH (keys only), Avahi (`*.local`).
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 
