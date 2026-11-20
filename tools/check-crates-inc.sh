@@ -13,7 +13,7 @@ status=0
 for inc in $(git ls-files 'meta-*/*-crates.inc'); do
     dir=$(dirname "$inc")
     name=$(basename "$inc" -crates.inc)
-    bb=$(ls "$dir/${name}"_*.bb 2>/dev/null | head -n 1)
+    bb=$(find "$dir" -maxdepth 1 -name "${name}_*.bb" | head -n 1)
     [ -n "$bb" ] || { echo "$inc: no ${name}_<version>.bb next to it"; status=1; continue; }
     repo=$(sed -n 's|.*git://github\.com/\([A-Za-z0-9._-]*/[A-Za-z0-9._-]*\)\.git;.*|\1|p' "$bb" | head -n 1)
     rev=$(sed -n 's|^SRCREV = "\([0-9a-f]\{40\}\)"|\1|p' "$bb")
