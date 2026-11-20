@@ -36,6 +36,8 @@ To turn it off, untick everything and Save.
   Concentratord's events next to the MQTT Forwarder and sends every frame with a good CRC to each server over the
   Semtech UDP protocol (`PUSH_DATA`), with a keepalive every 10 s (`PULL_DATA`). Downlinks from a server
   (`PULL_RESP`) go to Concentratord's command socket, like the local ChirpStack's.
+  Its answer (`TX_ACK`) is patched to carry no JSON on success, as Semtech's forwarders do; upstream sends
+  `"error":""`, which The Things Stack counts as a failed downlink and answers by repeating MAC commands.
 - Each network keeps only its own devices' frames, by DevAddr and JoinEUI; TTN passes frames of other networks on
   through Packet Broker. Your own devices on the local ChirpStack stay private to it: their payloads are encrypted
   with keys only ChirpStack has, so a public network sees metadata (DevAddr, signal strength) and cannot read them.
