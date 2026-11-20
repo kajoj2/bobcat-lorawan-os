@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: MIT
+# The whole image and update bundle, built in stages that each fit a hosted runner's 6 h job limit. Each stage hands
+# the shared state it added to the next one as an artifact (stage.yml). Weekly, on demand, and on a pull request
+# when a maintainer adds the label full-build (a run from scratch takes about 4 to 5 runner hours, so not on every
+# pull request). A stage that runs out of time keeps what it built: "Re-run failed jobs" continues from there.
+# A board test still happens on a maintainer's build host.
+name: full-build
+
+on:
+  schedule:
+    - cron: "23 1 * * 3"
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-build-${{ github.ref }}-${{ github.event.label.name || 'run' }}
+  cancel-in-progress: false
+
+jobs:
+  # Cross toolchain, kernel, U-Boot: the same targets as the build workflow, starting from its cache.
+  toolchain:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'full-build'
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 1-toolchain
+      targets: >-
+        virtual/kernel virtual/bootloader libloragw-sx1302:do_package_qa bobcat-emmc:do_package_qa
+        bobcat-rauc:do_package_qa bobcat-wifibt-firmware:do_package_qa
+      cache-restore: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-
+      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+
+  # The Rust toolchain (LLVM, rust, cargo), through the smallest Rust recipe.
+  rust:
+    needs: toolchain
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 2-rust
+      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      targets: lorawan-agent:do_package_qa
+
+  # ChirpStack and its companions. chirpstack's link (LTO) is the heaviest task of the build.
+  chirpstack:
+    needs: rust
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 3-chirpstack
+      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      targets: >-
+        chirpstack-concentratord:do_package_qa chirpstack-mqtt-forwarder:do_package_qa
+        chirpstack-udp-forwarder:do_package_qa chirpstack:do_package_qa
+
+  # The rest of the userland, the image and the update bundle (signed with the throwaway CI keys).
+  image:
+    needs: chirpstack
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 4-image
+      lock-hash: ${{ hashFiles('kas/bobcat-g285.lock.yml') }}
+      targets: lorawan-gateway-image lorawan-gateway-bundle
