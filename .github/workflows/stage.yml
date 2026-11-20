@@ -99,7 +99,7 @@ jobs:
           cd "$SSTATE"
           find . -type f -newer "$RUNNER_TEMP/stage-start" ! -name '*.siginfo' > "$RUNNER_TEMP/new-files"
           wc -l < "$RUNNER_TEMP/new-files"
-          du -ch $(cat "$RUNNER_TEMP/new-files") 2>/dev/null | tail -n 1
+          xargs -r -a "$RUNNER_TEMP/new-files" du -ch | tail -n 1
           mkdir -p "$RUNNER_TEMP/upload"
           rsync -a --files-from="$RUNNER_TEMP/new-files" . "$RUNNER_TEMP/upload/"
 
