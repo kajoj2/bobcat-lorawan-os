@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+# short-description: SD card for the Bobcat G285 that its factory boot loader can start
+# long-description: meta-rockchip's rockchip.wks reduced to what the G285 needs, laid out so that both boot paths
+# find U-Boot (docs/flashing.md, "How the card boots"):
+#
+#   Sector   Size     GPT entry      Contents
+#   64       3552K    (none)         idbloader: DDR init + our U-Boot SPL. Read by the boot ROM when the eMMC has
+#                                    no loader; the factory SPL on the eMMC never looks at it.
+#   16384    4096K    1: uboot       u-boot.itb (TF-A BL31 + U-Boot + device tree).
+#   32768    -        2: rootfsA     root file system (extlinux.conf in /boot, the kernel finds it by PARTLABEL).
+#
+# The factory SPL (Rockchip U-Boot 2017.09) on the eMMC tries the SD card first and looks up the GPT entry named
+# "uboot". It walks the entries one by one and re-reads the table for each, without freeing, whenever the GPT
+# does not span the whole medium (it never does: the image is smaller than the card). With rockchip.wks (nine
+# entries, none named "uboot") that ran its heap dry ("space exhausted") and the board did not boot at all; with
+# "uboot" as entry 1 it reads the table once. Our own SPL loads u-boot.itb from sector 16384 whatever its name.
+
+part loader1   --offset 64s    --fixed-size 3552K --fstype=none --no-table --source rawcopy --sourceparams="file=${SPL_BINARY}"
+part uboot     --offset 16384s --fixed-size 4096K --fstype=none --part-name uboot --source rawcopy --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+part /         --offset 32768s --label rootfsA --active --fstype=ext4 --part-name rootfsA --source rootfs --part-type ${ROOT_DPS}
+
+bootloader --ptable gpt
