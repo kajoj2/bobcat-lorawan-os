@@ -5,6 +5,7 @@
 
 FILESEXTRAPATHS:prepend:bobcat := "${THISDIR}/files:"
 
+# nooelint: oelint.vars.noncoreoverride
 BOBCAT_DDR_MHZ ??= "1056"
 RKBIN_DDR_RECONFIGURE:bobcat = "${@'0' if d.getVar('BOBCAT_DDR_MHZ') == '1056' else '1'}"
 

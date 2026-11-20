@@ -29,6 +29,10 @@ G285.
 <!-- REUSE-IgnoreEnd -->
 - Device tree changes: run `tools/check-dts.sh` (CI does too).
 - Shell scripts: POSIX sh, `shellcheck` clean.
+- Recipes: `oelint-adv` clean with the repository's `.oelint.cfg` (run it from the top:
+  `oelint-adv $(git ls-files '*.bb' '*.bbappend' '*.bbclass' '*.inc')`). A deliberate exception gets a
+  `# nooelint: <rule>` comment on the line above it. CI also has bitbake parse both kas configurations and dry-run
+  their targets, so a recipe that does not parse fails the pull request without a full build.
 
 ## Style
 

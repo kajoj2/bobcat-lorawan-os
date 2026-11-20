@@ -12,6 +12,7 @@ inherit cargo systemd
 PV = "0.1.0"
 
 # The source lives in this repository (lorawan-agent/ at the top), not in a fetched tarball.
+# nooelint: oelint.vars.fileextrapaths,oelint.vars.outofcontext
 FILESEXTRAPATHS:prepend := "${THISDIR}/../../..:"
 SRC_URI = "file://lorawan-agent/"
 S = "${UNPACKDIR}/lorawan-agent"

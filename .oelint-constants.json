@@ -1,0 +1,12 @@
+{
+  "variables": {
+    "known": [
+      "LORAWAN_DEBUG_TOOLS",
+      "RAUC_SLOT_rootfs"
+    ]
+  },
+  "replacements": {
+    "distros": ["lorawan-os"],
+    "machines": ["bobcat", "bobcat-g285"]
+  }
+}
