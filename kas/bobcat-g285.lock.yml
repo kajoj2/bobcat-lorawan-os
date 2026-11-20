@@ -8,7 +8,7 @@ overrides:
     bitbake:
       commit: 6e260eb6ab1631607ea414d9ff8ede1155faa5d9
     openembedded-core:
-      commit: 33a6bd6cc8a9a976902081642414bd67adc74879
+      commit: 16a03ed6c2db2fa1d7edac4f288a74958a00eb9f
     meta-openembedded:
       commit: c0fcd7cca3760ef24e087ac4a31b8f357cb204da
     meta-arm:
