@@ -27,5 +27,6 @@ SYSTEMD_SERVICE:${PN} = "var-lib.mount"
 FILES:${PN} += "${systemd_system_unitdir}"
 
 # rauc-service: the D-Bus service the panel talks to; rauc-mark-good: marks a slot good once it has booted;
-# u-boot-env: /etc/fw_env.config for fw_setenv (RAUC's bootloader access, through libubootenv).
-RDEPENDS:${PN} = "rauc rauc-service rauc-mark-good u-boot-env e2fsprogs-resize2fs"
+# u-boot-env: /etc/fw_env.config, libubootenv-bin: fw_printenv/fw_setenv (RAUC's access to the U-Boot environment;
+# meta-rauc only adds it when PREFERRED_PROVIDER_virtual/bootloader is set, which meta-rockchip does not).
+RDEPENDS:${PN} = "rauc rauc-service rauc-mark-good u-boot-env libubootenv-bin e2fsprogs-resize2fs"
