@@ -22,6 +22,8 @@ the pull request that confirms them, and move the fact to "V" in [hardware-g285.
       console: the vendor SPL banner, then mainline U-Boot. If the vendor SPL rejects our FIT image, options are a
       vendor-compatible U-Boot image or making the boot ROM skip the eMMC (Maskrom); decide then.
       2026-11-17: no, the factory SPL fails on our card; the board boots the card once the eMMC loader area is cleared (docs/flashing.md).
+      2026-11-20: cause found (no GPT entry named `uboot`, the SPL runs out of heap looking for it); with
+      `wic/bobcat-g285.wks` Rockchip's SPL (rkbin v1.14, standing in for the factory one) starts our U-Boot, TF-A and Linux.
 - [x] U-Boot finds `extlinux/extlinux.conf` on the root partition and starts the kernel.
 - [x] RAM size reported as 2 GB (DDR blob `rk3566_ddr_1056MHz_v1.23`).
 

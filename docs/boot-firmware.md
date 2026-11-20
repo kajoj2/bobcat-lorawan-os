@@ -94,6 +94,9 @@ This runs the memory above what Rockchip and Bobcat set for this board. Gains fo
 CPU is mostly idle); it would matter for memory-bound work (NPU, compression, several containers). Risks: the
 board does not start, or memory errors show up only under load or heat, silently corrupting data.
 
+The clock only applies when our idbloader runs, that is with the eMMC's loader area cleared (docs/flashing.md,
+"Optional: our whole boot chain"); behind the factory loader the memory keeps the factory's 1056 MHz.
+
 Tested on one board (above): the console prints `DDR ... 1332MHz`, `memtester` is clean, and the overnight
 `stress-ng` run passed, so 1332 MHz is the default. One board is a small sample: if a board misbehaves under load
 (random crashes, corrupted files), build with `BOBCAT_DDR_MHZ = "1056"` first. Reports of either result are welcome.

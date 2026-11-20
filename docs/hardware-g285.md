@@ -35,7 +35,7 @@ the notes above, and the device tree was written from scratch.
 
 | | | |
 |---|---|---|
-| The boot ROM starts the eMMC's loader when it has one; the factory loader (Rockchip SPL 2017.09) tries the SD card first, but fails on our card (`space exhausted` reading its GPT) and then on the eMMC too | V | [FACT] |
+| The boot ROM starts the eMMC's loader when it has one; the factory loader (Rockchip SPL 2017.09) tries the SD card first and loads U-Boot from its GPT entry named `uboot` (else raw sector 16384). On a card whose GPT has many entries and no `uboot` it runs out of heap (`space exhausted`) and then fails on the eMMC too; with `uboot` as entry 1 it boots the card (tested with rkbin's SPL v1.14) | V | [FACT] |
 | With the eMMC's loader area (sectors 64..16383) cleared, the boot ROM boots our idbloader and U-Boot from the SD card (docs/flashing.md) | V | [FACT] |
 | The factory U-Boot ignores console input (no way to stop autoboot) | V | [FACT] |
 | RECOVERY held at power-on: Rockchip Loader mode on the rear micro-USB (`2207:350a`); `rkdeveloptool rl` returns real data for the first 32 MiB of the eMMC only, `0xCC` filler beyond | V | [FACT] |
