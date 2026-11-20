@@ -28,7 +28,7 @@ jobs:
 
       - name: Shell scripts
         run: |
-          shellcheck tools/*.sh $(git ls-files '*.sh')
+          shellcheck tools/*.sh $(git ls-files '*.sh') meta-bobcat/recipes-support/bobcat-emmc/files/bobcat-emmc
 
       - name: Python tools
         run: python3 -m py_compile tools/*.py meta-lorawan/lib/oeqa/runtime/cases/*.py

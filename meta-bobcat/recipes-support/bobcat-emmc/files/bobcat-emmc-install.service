@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Install the running system (booted from the SD card) onto the eMMC; started by lorawan-agent's panel or by hand
+# (`systemctl start bobcat-emmc-install`). Progress: `bobcat-emmc info` or /run/bobcat-emmc/state.
+[Unit]
+Description=Install LoRaWAN Gateway OS onto the eMMC
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/flashing.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/bobcat-emmc install --yes
+# Copying and resizing take minutes; never cut it short.
+TimeoutStartSec=infinity

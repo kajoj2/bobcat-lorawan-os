@@ -1,0 +1,323 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+#
+# bobcat-emmc: back up the Bobcat G285's eMMC and install the running system (booted from the SD card) onto it.
+# Used by lorawan-agent's panel (docs/lorawan-agent.md) and from a shell (docs/flashing.md, "Install to the eMMC").
+#
+#   bobcat-emmc info                 state of the eMMC and of a running install, as key=value lines
+#   bobcat-emmc backup ITEM          one backup item to stdout (zstd-compressed unless noted):
+#                                      head   sectors 0..32767 (16 MiB): GPT, boot loader area, first partition
+#                                      tail   the last 33 sectors: backup GPT (raw)
+#                                      boot0, boot1  the eMMC's boot partitions (4 MiB each)
+#                                      pN     partition N; ext4 holds only its used blocks (e2image), else raw
+#                                      full   the whole eMMC, every sector (~60 GB raw; hours over the network)
+#                                      restore  how to write the items back (text)
+#   bobcat-emmc install              erase the eMMC and install this system onto it (see do_install below)
+#
+# The eMMC is /dev/mmcblk0 and the SD card /dev/mmcblk1 on this board (device tree aliases mmc0/mmc1).
+
+set -eu
+
+EMMC=/dev/mmcblk0
+SD=/dev/mmcblk1
+STATE_DIR=/run/bobcat-emmc
+STATE=$STATE_DIR/state
+SECTOR=512
+
+# eMMC layout written by install (sectors). A/B system partitions for updates, data for /var/lib.
+UBOOT_START=16384
+UBOOT_SIZE=8192
+SYS_START=32768
+SYS_SIZE=8388608            # 4 GiB each
+DATA_START=$((SYS_START + 2 * SYS_SIZE))
+ROOT_TYPE=B921B045-1DF0-41C3-AF44-4C6F280D3FAE   # Linux ARM64 root (/)
+DATA_TYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4   # Linux filesystem
+
+# Services that write to the root file system; stopped while it is copied.
+GATEWAY_UNITS="chirpstack chirpstack-mqtt-forwarder chirpstack-concentratord mosquitto redis"
+
+die() { echo "bobcat-emmc: $*" >&2; exit 1; }
+
+sectors() { cat "/sys/class/block/$(basename "$1")/size"; }
+
+# The magic of a Rockchip boot loader (idbloader) at sector 64: RKNS, RKSS (signed), or nothing.
+loader_magic() {
+    m=$(dd if="$EMMC" bs=$SECTOR skip=64 count=1 2>/dev/null | dd bs=4 count=1 2>/dev/null | tr -dc '[:upper:]')
+    case "$m" in RKNS|RKSS) echo "$m" ;; *) echo none ;; esac
+}
+
+is_ext4() {
+    # ext4 superblock magic 0xEF53 at byte 1080, little endian: "S" then octal 357
+    [ "$(dd if="$1" bs=1 skip=1080 count=2 2>/dev/null)" = "$(printf 'S\357')" ]
+}
+
+ext4_used() {
+    dumpe2fs -h "$1" 2>/dev/null | awk -F: '
+        /^Block count/ {c=$2} /^Free blocks/ {f=$2} /^Block size/ {b=$2}
+        END {if (b) printf "%.0f", (c - f) * b; else print 0}'
+}
+
+partname() { grep -s '^PARTNAME=' "/sys/class/block/$1/uevent" | cut -d= -f2; }
+
+# Where the running system came from: "sd" (root on the card), "emmc", or "unknown".
+boot_device() {
+    root=$(sed -n 's/.*root=\([^ ]*\).*/\1/p' /proc/cmdline)
+    case "$root" in
+        PARTLABEL=*) dev=$(readlink -f "/dev/disk/by-partlabel/${root#PARTLABEL=}" 2>/dev/null || true) ;;
+        PARTUUID=*) dev=$(readlink -f "/dev/disk/by-partuuid/$(echo "${root#PARTUUID=}" | tr A-F a-f)" 2>/dev/null || true) ;;
+        /dev/*) dev=$root ;;
+        *) dev= ;;
+    esac
+    case "$dev" in
+        "$SD"p*) echo sd ;;
+        "$EMMC"p*) echo emmc ;;
+        *) echo unknown ;;
+    esac
+}
+
+sd_root() {
+    dev=$(readlink -f /dev/disk/by-partlabel/rootfsA 2>/dev/null || true)
+    case "$dev" in "$SD"p*) echo "$dev" ;; *) echo "" ;; esac
+}
+
+# What is on the eMMC now: factory (Bobcat's partitions), ours (installed by this script), empty, other.
+emmc_content() {
+    names=""
+    for p in /sys/class/block/mmcblk0p*; do
+        [ -e "$p" ] || continue
+        names="$names $(partname "$(basename "$p")")"
+    done
+    case " $names " in
+        *" system_a "*) echo ours ;;
+        *" skyboot "*) echo factory ;;
+        "  ") [ "$(loader_magic)" = none ] && echo empty || echo other ;;
+        *) echo other ;;
+    esac
+}
+
+info() {
+    if [ ! -b "$EMMC" ]; then
+        echo "emmc=absent"
+        return
+    fi
+    echo "emmc=present"
+    echo "emmc_bytes=$(( $(sectors $EMMC) * SECTOR ))"
+    echo "emmc_content=$(emmc_content)"
+    echo "emmc_loader=$(loader_magic)"
+    echo "boot=$(boot_device)"
+    echo "sd_root=$(sd_root)"
+    total=$((32768 * SECTOR))
+    for p in /sys/class/block/mmcblk0p*; do
+        [ -e "$p" ] || continue
+        n=$(basename "$p")
+        dev=/dev/$n
+        size=$(( $(sectors "$dev") * SECTOR ))
+        if is_ext4 "$dev"; then fs=ext4; used=$(ext4_used "$dev"); else fs=raw; used=$size; fi
+        total=$((total + used))
+        echo "part=${n#mmcblk0p}:$(partname "$n"):$size:$fs:$used"
+    done
+    echo "backup_used_bytes=$total"
+    if [ -f "$STATE" ]; then
+        sed 's/^/install_/' "$STATE"
+    else
+        echo "install_state=idle"
+    fi
+}
+
+not_mounted_rw() {
+    awk -v d="$1" '$1 == d && $4 ~ /(^|,)rw(,|$)/ {exit 1}' /proc/mounts \
+        || die "$1 is mounted read-write; unmount it first"
+}
+
+backup() {
+    item=${1:-}
+    [ -b "$EMMC" ] || die "no eMMC"
+    case "$item" in
+        head) dd if="$EMMC" bs=$SECTOR count=32768 2>/dev/null | zstd -q -T0 -3 -c ;;
+        tail)
+            n=$(sectors $EMMC)
+            dd if="$EMMC" bs=$SECTOR skip=$((n - 33)) count=33 2>/dev/null ;;
+        boot0|boot1)
+            [ -b "${EMMC}$item" ] || die "no ${EMMC}$item"
+            zstd -q -T0 -3 -c < "${EMMC}$item" ;;
+        p[0-9]*)
+            dev=${EMMC}${item}
+            [ -b "$dev" ] || die "no partition $dev"
+            not_mounted_rw "$dev"
+            if is_ext4 "$dev"; then
+                e2image -ra "$dev" - 2>/dev/null | zstd -q -T0 -3 -c
+            else
+                zstd -q -T0 -3 -c < "$dev"
+            fi ;;
+        full) dd if="$EMMC" bs=4M 2>/dev/null | zstd -q -T0 -3 -c ;;
+        restore) restore_text ;;
+        *) die "unknown backup item '$item' (head, tail, boot0, boot1, pN, full, restore)" ;;
+    esac
+}
+
+restore_text() {
+    n=$(sectors $EMMC)
+    cat <<EOF
+Restoring this eMMC backup (Bobcat G285)
+========================================
+
+Made on $(date -u '+%Y-%m-%d %H:%M UTC') from an eMMC of $n sectors ($((n * SECTOR)) bytes).
+Partitions at the time of the backup:
+
+$(for p in /sys/class/block/mmcblk0p*; do [ -e "$p" ] || continue; b=$(basename "$p"); printf '  %-4s %-10s start %-10s size %s sectors\n' "${b#mmcblk0p}" "$(partname "$b")" "$(cat "$p/start")" "$(cat "$p/size")"; done)
+
+Boot the gateway from an SD card with LoRaWAN Gateway OS, then from the computer that holds the files
+(replace GW with the gateway's address). Nothing on the eMMC may be mounted.
+
+1. Partition table, boot loader and the first partition (sectors 0..32767):
+     zstd -dc emmc-head.img.zst | ssh root@GW 'dd of=/dev/mmcblk0 bs=512 && sync'
+2. Backup partition table at the end of the eMMC:
+     ssh root@GW 'dd of=/dev/mmcblk0 bs=512 seek=$((n - 33)) && sync' < emmc-tail.img
+3. Reboot from the SD card, so Linux reads the restored partition table, then each partition file
+   (pN = partition N above; ext4 files are full-size raw images whose unused blocks are zeros):
+     zstd -dc emmc-pN.img.zst | ssh root@GW 'dd of=/dev/mmcblk0pN bs=4M && sync'
+4. Optional, the eMMC boot partitions (usually unused):
+     ssh root@GW 'echo 0 > /sys/block/mmcblk0boot0/force_ro'
+     zstd -dc emmc-boot0.img.zst | ssh root@GW 'dd of=/dev/mmcblk0boot0 bs=4M && sync'   (same for boot1)
+
+Or, from a full raw backup (emmc-full.img.zst), everything at once:
+     zstd -dc emmc-full.img.zst | ssh root@GW 'dd of=/dev/mmcblk0 bs=4M && sync'
+
+Power off, take the SD card out: the board starts what is on the eMMC.
+EOF
+}
+
+# --- do_install --------------------------------------------------------------------------------------------------
+
+step=0
+STEPS=9
+progress() {
+    step=$((step + 1))
+    printf 'state=running\nstep=%s\nsteps=%s\nmessage=%s\nstarted=%s\n' "$step" "$STEPS" "$1" "$started" > "$STATE.new"
+    mv "$STATE.new" "$STATE"
+    echo "[$step/$STEPS] $1"
+}
+
+frozen=""
+mounted=""
+cleanup() {
+    rc=$?
+    [ -n "$frozen" ] && fsfreeze -u / 2>/dev/null || true
+    for m in $mounted; do umount "$m" 2>/dev/null || true; done
+    journalctl --flush 2>/dev/null || true
+    # shellcheck disable=SC2086
+    systemctl start $GATEWAY_UNITS 2>/dev/null || true
+    if [ "$rc" -ne 0 ]; then
+        msg=$(tail -n 1 "$STATE_DIR/log" 2>/dev/null || echo "exit code $rc")
+        printf 'state=failed\nstep=%s\nsteps=%s\nmessage=%s\nstarted=%s\n' "$step" "$STEPS" "$msg" "$started" > "$STATE"
+    fi
+}
+
+do_install() {
+    mkdir -p "$STATE_DIR"
+    started=$(date -u +%s)
+    exec 2>>"$STATE_DIR/log"
+    trap cleanup EXIT
+
+    progress "checking"
+    [ -b "$EMMC" ] || die "no eMMC"
+    [ "$(boot_device)" = sd ] || die "the running system must have booted from the SD card"
+    src=$(sd_root)
+    [ -n "$src" ] || die "no rootfsA partition on the SD card"
+    awk -v e="$EMMC" 'index($1, e) == 1 {exit 1}' /proc/mounts || die "a partition of the eMMC is mounted"
+    total=$(sectors $EMMC)
+    [ "$total" -gt $((DATA_START + 2097152)) ] || die "eMMC too small ($total sectors)"
+    src_size=$(sectors "$src")
+    [ "$src_size" -le "$SYS_SIZE" ] || die "the SD card's root file system is larger than a system partition"
+    for t in sfdisk fsfreeze e2fsck resize2fs tune2fs mkfs.ext4; do
+        command -v $t >/dev/null || die "$t is missing"
+    done
+
+    progress "erasing the eMMC's partition table and boot loader"
+    # The loader area first: a board interrupted from here on boots the SD card (no loader on the eMMC).
+    dd if=/dev/zero of="$EMMC" bs=$SECTOR seek=64 count=$((UBOOT_START - 64)) 2>/dev/null
+    dd if=/dev/zero of="$EMMC" bs=$SECTOR count=34 2>/dev/null
+    dd if=/dev/zero of="$EMMC" bs=$SECTOR seek=$((total - 33)) count=33 2>/dev/null
+    sync
+
+    progress "partitioning: uboot, system_a, system_b, data"
+    sfdisk --quiet --wipe always --label gpt "$EMMC" >&2 <<EOF
+start=$UBOOT_START, size=$UBOOT_SIZE, name=uboot
+start=$SYS_START, size=$SYS_SIZE, type=$ROOT_TYPE, name=system_a, attrs=LegacyBIOSBootable
+start=$((SYS_START + SYS_SIZE)), size=$SYS_SIZE, type=$ROOT_TYPE, name=system_b
+start=$DATA_START, type=$DATA_TYPE, name=data
+EOF
+    udevadm settle 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do [ -b ${EMMC}p4 ] && break; sleep 1; done
+    [ -b ${EMMC}p4 ] || die "the new partitions did not show up"
+
+    progress "copying the system (gateway services stop for a moment)"
+    # shellcheck disable=SC2086
+    systemctl stop $GATEWAY_UNITS 2>/dev/null || true
+    journalctl --relinquish-var 2>/dev/null || true
+    sync
+    # A consistent copy of the mounted root file system: writes wait while it is frozen. Nothing in here may
+    # write to the root file system, so all output goes to /run.
+    frozen=1
+    fsfreeze -f /
+    dd if="$src" of=${EMMC}p2 bs=4M 2>>"$STATE_DIR/log"
+    fsfreeze -u /
+    frozen=""
+    journalctl --flush 2>/dev/null || true
+    # shellcheck disable=SC2086
+    systemctl start $GATEWAY_UNITS 2>/dev/null || true
+
+    progress "checking and growing system_a"
+    e2fsck -fy ${EMMC}p2 >&2 || [ $? -le 1 ]
+    resize2fs ${EMMC}p2 >&2
+    tune2fs -U random -L system_a ${EMMC}p2 >&2
+
+    progress "creating system_b and data"
+    mkfs.ext4 -q -F -L system_b ${EMMC}p3 >&2
+    mkfs.ext4 -q -F -L data ${EMMC}p4 >&2
+
+    progress "moving /var/lib to the data partition"
+    a=$STATE_DIR/a
+    d=$STATE_DIR/d
+    mkdir -p "$a" "$d"
+    mount ${EMMC}p2 "$a"; mounted="$a $mounted"
+    mount ${EMMC}p4 "$d"; mounted="$d $mounted"
+    cp -a "$a/var/lib/." "$d/"
+    for f in "$a"/var/lib/* "$a"/var/lib/.[!.]*; do
+        [ -e "$f" ] && rm -rf "$f"
+    done
+    sys_uuid=$(sfdisk --part-uuid "$EMMC" 2 | tr A-F a-f)
+    data_uuid=$(sfdisk --part-uuid "$EMMC" 4 | tr A-F a-f)
+    [ -n "$sys_uuid" ] && [ -n "$data_uuid" ] || die "cannot read the new partitions' PARTUUIDs"
+    # Root and /var/lib by PARTUUID: the SD card's names (rootfsA) must not match anything on the eMMC.
+    sed -i "s|root=PARTLABEL=rootfsA|root=PARTUUID=$sys_uuid|" "$a/boot/extlinux/extlinux.conf"
+    grep -q "root=PARTUUID=$sys_uuid" "$a/boot/extlinux/extlinux.conf" || die "extlinux.conf not updated"
+    printf 'PARTUUID=%s  /var/lib  ext4  defaults,noatime  0  2\n' "$data_uuid" >> "$a/etc/fstab"
+    umount "$d"; umount "$a"; mounted=""
+
+    progress "writing the boot loader (idbloader and U-Boot, from the SD card)"
+    # Sectors 64..24575 of the card: idbloader at 64 and u-boot.itb at 16384, same places on the eMMC.
+    dd if="$SD" of="$EMMC" bs=$SECTOR skip=64 seek=64 count=$((UBOOT_START + UBOOT_SIZE - 64)) 2>/dev/null
+    sync
+    [ "$(loader_magic)" != none ] || die "no boot loader on the eMMC after writing it"
+
+    progress "done: power off, take the SD card out, power on"
+    printf 'state=done\nstep=%s\nsteps=%s\nmessage=%s\nstarted=%s\nfinished=%s\n' "$step" "$STEPS" \
+        "Installed. Power off, take the SD card out and power on: the gateway starts from the eMMC." \
+        "$started" "$(date -u +%s)" > "$STATE"
+}
+
+case "${1:-}" in
+    info) info ;;
+    backup) backup "${2:-}" ;;
+    install)
+        [ "$(id -u)" = 0 ] || die "run as root"
+        if [ "${2:-}" != "--yes" ]; then
+            echo "This erases the whole eMMC (the factory system too) and installs this system onto it."
+            printf 'Type "erase" to go on: '
+            read -r answer
+            [ "$answer" = erase ] || die "cancelled"
+        fi
+        do_install ;;
+    *) sed -n '4,17s/^# \{0,1\}//p' "$0"; exit 2 ;;
+esac

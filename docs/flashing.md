@@ -57,6 +57,45 @@ button on the board while connecting the 12 V supply, and connect the rear micro
 then shows the SD card and the eMMC as two USB disks; write the new image to the SD card disk as above, then
 power-cycle (docs/boot-firmware.md).
 
+## Install onto the eMMC
+
+The SD card wears out under a gateway's constant writes; the board's 64 GB eMMC lasts much longer. Running from
+the card, the panel (`http://bobcat-g285.local/`, "Internal storage (eMMC)") backs up the eMMC and installs the
+system onto it. From a shell the same is `bobcat-emmc` (`bobcat-emmc info`, `bobcat-emmc backup ITEM`,
+`bobcat-emmc install`).
+
+1. Change the ChirpStack admin password first (ChirpStack's web interface on port 8080): the panel's backups and
+   install ask for that login, and refuse while it is still admin/admin.
+2. **Back up the factory eMMC** if you may ever want the Bobcat firmware back. The panel offers:
+   - **Essentials**: the partition table, the boot loader and every partition with only its used blocks
+     (`e2image`). That is everything needed to put the eMMC back as it was, ~640 MB compressed and a few minutes
+     for a factory G285. Download every item and `RESTORE.txt`, which lists the commands to write them back; the
+     panel also shows a `curl` loop that fetches them all.
+   - **Full raw copy**: every sector, old deleted data included. Exact, but slow (30 minutes to hours) and big
+     (36 GB from a used factory eMMC).
+3. **Install**: type ERASE and start. It takes a few minutes; the gateway services pause for about a minute while
+   the system is copied. The SD card's system is copied as it is, with your settings, SSH keys, Wi-Fi and
+   ChirpStack data.
+4. Power off, take the card out, power on: the gateway starts from the eMMC, with our whole boot chain (DDR at
+   1332 MHz).
+
+The eMMC layout:
+
+| Sectors | GPT entry | Contents |
+|---|---|---|
+| 64 | (none) | idbloader (DDR init + U-Boot SPL), copied from the card |
+| 16384 | 1: `uboot` | u-boot.itb, copied from the card |
+| 32768 | 2: `system_a` | the running system (4 GiB) |
+| | 3: `system_b` | empty, for A/B updates later (4 GiB) |
+| | 4: `data` | the rest (~50 GB), mounted on `/var/lib`: ChirpStack, Redis, Mosquitto, secrets |
+
+The eMMC system finds its partitions by PARTUUID, so a card inserted later does not mix with it: with a card in
+the slot the board starts the card (U-Boot tries the SD card first), which is also the way back if the eMMC
+system does not start. To reinstall, boot a card with a new image and install again from its panel.
+
+If the install stops half-way, the eMMC has no boot loader (that is written last) and the board keeps starting
+from the card; run it again.
+
 ## Optional: our whole boot chain
 
 With the factory loader in front, the DDR set-up and the SPL are Bobcat's; everything after them is ours. To run

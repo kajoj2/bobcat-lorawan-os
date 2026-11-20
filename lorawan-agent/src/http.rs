@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-//! A small HTTP/1.1 server for the panel (`/`), its data (`/api/status`) and the text report (`/api/status.txt`),
-//! plus the HTTP client side used for ChirpStack's gRPC-web API and by `lorawan-diag`.
+//! A small HTTP/1.1 server for the panel (`/`), its data (`/api/status`), the text report (`/api/status.txt`) and
+//! the eMMC page's requests (`/api/storage...`), plus the HTTP client side used for ChirpStack's gRPC-web API and by
+//! `lorawan-diag`.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -10,11 +11,34 @@ use std::thread;
 use std::time::Duration;
 
 const MAX_CONNECTIONS: usize = 16;
+/// Request line, headers and body together; the panel only ever sends small forms.
+const MAX_REQUEST: u64 = 16384;
+
+pub struct Request {
+    pub method: String,
+    pub path: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+impl Request {
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// Writes a response body of unknown length (a backup), after the head; the connection closes at its end.
+pub type Streamer = Box<dyn FnOnce(&mut dyn Write) -> io::Result<()> + Send>;
 
 pub struct Response {
     pub status: u16,
     pub content_type: &'static str,
     pub body: Vec<u8>,
+    pub headers: Vec<(&'static str, String)>,
+    pub stream: Option<Streamer>,
 }
 
 impl Response {
@@ -23,60 +47,132 @@ impl Response {
             status,
             content_type,
             body: body.into(),
+            headers: Vec::new(),
+            stream: None,
         }
+    }
+
+    pub fn streamed(content_type: &'static str, stream: Streamer) -> Response {
+        Response {
+            stream: Some(stream),
+            ..Response::new(200, content_type, Vec::new())
+        }
+    }
+
+    pub fn with_header(mut self, name: &'static str, value: impl Into<String>) -> Response {
+        self.headers.push((name, value.into()));
+        self
     }
 }
 
 fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
+        202 => "Accepted",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        409 => "Conflict",
         503 => "Service Unavailable",
         _ => "Error",
     }
 }
 
-fn write_response(stream: &mut TcpStream, r: &Response, head_only: bool) -> io::Result<()> {
-    let head = format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
+fn write_response(stream: &mut TcpStream, r: Response, head_only: bool) -> io::Result<()> {
+    let mut head = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\n",
         r.status,
         reason(r.status),
-        r.content_type,
-        r.body.len()
+        r.content_type
+    );
+    if r.stream.is_none() {
+        head.push_str(&format!("Content-Length: {}\r\n", r.body.len()));
+    }
+    for (k, v) in &r.headers {
+        head.push_str(&format!("{k}: {v}\r\n"));
+    }
+    head.push_str(
+        "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
     );
     stream.write_all(head.as_bytes())?;
-    if !head_only {
-        stream.write_all(&r.body)?;
+    if head_only {
+        return stream.flush();
+    }
+    match r.stream {
+        Some(f) => {
+            // A backup can pause while the compressor reads past empty space; give the client time, not 5 s.
+            stream.set_write_timeout(Some(Duration::from_secs(300)))?;
+            f(stream)?;
+        }
+        None => stream.write_all(&r.body)?,
     }
     stream.flush()
 }
 
-fn handle(mut stream: TcpStream, route: &(dyn Fn(&str) -> Response + Sync)) -> io::Result<()> {
-    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    let mut reader = BufReader::new(stream.try_clone()?).take(8192);
+fn read_request(stream: &TcpStream) -> io::Result<Request> {
+    let mut reader = BufReader::new(stream.try_clone()?).take(MAX_REQUEST);
     let mut line = String::new();
     reader.read_line(&mut line)?;
-    // Skip the headers; nothing here needs them.
+    let mut headers = Vec::new();
     loop {
         let mut h = String::new();
         if reader.read_line(&mut h)? == 0 || h == "\r\n" || h == "\n" {
             break;
         }
+        if let Some((k, v)) = h.split_once(':') {
+            headers.push((k.trim().to_string(), v.trim().to_string()));
+        }
     }
     let mut parts = line.split_whitespace();
     let (method, target) = (parts.next().unwrap_or(""), parts.next().unwrap_or("/"));
-    let path = target.split('?').next().unwrap_or("/");
-    let r = match method {
-        "GET" | "HEAD" => route(path),
+    let mut req = Request {
+        method: method.to_string(),
+        path: target.split('?').next().unwrap_or("/").to_string(),
+        headers,
+        body: Vec::new(),
+    };
+    if let Some(len) = req
+        .header("content-length")
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        if len > MAX_REQUEST {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "request too large",
+            ));
+        }
+        req.body.resize(len as usize, 0);
+        reader.read_exact(&mut req.body)?;
+    }
+    Ok(req)
+}
+
+pub type Route = dyn Fn(&Request) -> Response + Send + Sync;
+
+fn handle(mut stream: TcpStream, route: &Route) -> io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+    let req = match read_request(&stream) {
+        Ok(r) => r,
+        Err(_) => {
+            return write_response(
+                &mut stream,
+                Response::new(400, "text/plain", "bad request\n"),
+                false,
+            )
+        }
+    };
+    let r = match req.method.as_str() {
+        "GET" | "HEAD" | "POST" => route(&req),
         _ => Response::new(405, "text/plain", "method not allowed\n"),
     };
-    write_response(&mut stream, &r, method == "HEAD")
+    write_response(&mut stream, r, req.method == "HEAD")
 }
 
 /// Serves forever; one thread per connection, at most MAX_CONNECTIONS at once.
-pub fn serve(listener: TcpListener, route: Arc<dyn Fn(&str) -> Response + Send + Sync>) -> ! {
+pub fn serve(listener: TcpListener, route: Arc<Route>) -> ! {
     let active = Arc::new(AtomicUsize::new(0));
     loop {
         let Ok((mut stream, _)) = listener.accept() else {
@@ -85,7 +181,7 @@ pub fn serve(listener: TcpListener, route: Arc<dyn Fn(&str) -> Response + Send +
         if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
             let _ = write_response(
                 &mut stream,
-                &Response::new(503, "text/plain", "busy\n"),
+                Response::new(503, "text/plain", "busy\n"),
                 false,
             );
             continue;
@@ -223,8 +319,14 @@ mod tests {
         thread::spawn(move || {
             serve(
                 listener,
-                Arc::new(|p: &str| match p {
+                Arc::new(|r: &Request| match r.path.as_str() {
                     "/x" => Response::new(200, "text/plain", "hello"),
+                    "/post" => Response::new(200, "text/plain", r.body.clone())
+                        .with_header("X-Auth", r.header("authorization").unwrap_or("-")),
+                    "/stream" => Response::streamed(
+                        "text/plain",
+                        Box::new(|w: &mut dyn Write| w.write_all(b"streamed")),
+                    ),
                     _ => Response::new(404, "text/plain", ""),
                 }),
             )
@@ -234,5 +336,19 @@ mod tests {
         assert_eq!(r.header("content-type"), Some("text/plain"));
         let r = request(&addr, "GET", "/nope", &[], b"", Duration::from_secs(2)).unwrap();
         assert_eq!(r.status, 404);
+        let r = request(
+            &addr,
+            "POST",
+            "/post",
+            &[("Authorization", "Basic eA==")],
+            b"confirm=ERASE",
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert_eq!((r.status, r.body.as_slice()), (200, &b"confirm=ERASE"[..]));
+        assert_eq!(r.header("x-auth"), Some("Basic eA=="));
+        let r = request(&addr, "GET", "/stream", &[], b"", Duration::from_secs(2)).unwrap();
+        assert_eq!((r.status, r.body.as_slice()), (200, &b"streamed"[..]));
+        assert_eq!(r.header("content-length"), None);
     }
 }

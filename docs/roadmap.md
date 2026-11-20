@@ -52,15 +52,13 @@ how to show the AP password on a board without a screen (console, a label printe
 
 The SD card is the weak part in a gateway that writes all day. The board has 64 GB eMMC (HS200).
 
-Install:
-- A `bobcat-install` command on the SD image: writes idbloader (sector 64), U-Boot (sector 16384) and the
-  partitions to `/dev/mmcblk0`, after a check that a backup of the factory eMMC exists (or `--no-backup`). The
-  boot ROM then starts our loader from the eMMC; a card with an image should still win when inserted (to
-  check: U-Boot's boot order).
-- Layout decided together with updates: two root file systems (A/B) + a data partition (`/var/lib`: ChirpStack's
-  SQLite, Redis, Mosquitto, local history). A/B with RAUC (meta-rockchip has a demo) is the candidate; the
-  update decision in docs/architecture.md comes first.
-- The data partition survives updates and reinstalls; the root file system could become read-only.
+Install (done 2026-11-20, docs/flashing.md, "Install onto the eMMC"):
+- `bobcat-emmc` (meta-bobcat) with a page on the panel: eMMC backups (essentials with only used blocks, or a full
+  raw copy) and an install that writes idbloader, U-Boot and an A/B layout (`system_a`, `system_b`, `data` on
+  `/var/lib`) from the running card. U-Boot tries the card first (`boot_targets=mmc1 mmc0`), so a card still wins.
+- Still open: A/B updates themselves (RAUC is the candidate; the update decision in docs/architecture.md comes
+  first): `system_b` is empty until then, and a RAUC image needs the `data` mount in its own fstab. The root file
+  system could become read-only.
 
 Local history:
 - ChirpStack keeps only recent frames. For days/months of sensor values on the gateway itself: decoded uplinks

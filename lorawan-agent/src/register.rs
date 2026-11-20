@@ -140,15 +140,20 @@ pub fn grpc_web(api: &str, method: &str, token: &str, msg: &[u8]) -> Result<Vec<
     body.extend_from_slice(&(msg.len() as u32).to_be_bytes());
     body.extend_from_slice(msg);
     let auth = format!("Bearer {token}");
+    let mut headers = vec![
+        ("Content-Type", "application/grpc-web+proto"),
+        ("X-Grpc-Web", "1"),
+    ];
+    // Without a token (InternalService/Login) there must be no Authorization header at all: ChirpStack rejects
+    // an empty "Bearer ".
+    if !token.is_empty() {
+        headers.push(("Authorization", &auth));
+    }
     let r = http::request(
         api,
         "POST",
         &format!("/{method}"),
-        &[
-            ("Content-Type", "application/grpc-web+proto"),
-            ("X-Grpc-Web", "1"),
-            ("Authorization", &auth),
-        ],
+        &headers,
         &body,
         Duration::from_secs(15),
     )

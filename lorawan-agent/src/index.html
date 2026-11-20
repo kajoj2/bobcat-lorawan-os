@@ -58,6 +58,18 @@ svg line { stroke: var(--line); }
 .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 4px 0 10px; }
 .bar i { display: block; height: 100%; background: var(--ok); }
 .bar i.hi { background: var(--warn); } .bar i.full { background: var(--bad); }
+.note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+.warnbox { border-left: 3px solid var(--warn); padding: 6px 10px; margin: 8px 0; font-size: 13px; }
+.badbox { border-left: 3px solid var(--bad); padding: 6px 10px; margin: 8px 0; font-size: 13px; }
+.files { margin: 6px 0 10px; padding-left: 18px; }
+.files li { margin: 2px 0; }
+a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
+button, input[type=text] { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); }
+button.danger { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+details summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 8px 0; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -80,6 +92,7 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card"><h2>System</h2><dl id="system"></dl></section>
   <section class="card wide"><h2>Last frames</h2><div class="scroll" id="frames"></div></section>
   <section class="card wide"><h2>Network</h2><div id="net"></div></section>
+  <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
 <footer id="foot"></footer>
 <script>
@@ -207,6 +220,102 @@ async function tick() {
 }
 tick();
 setInterval(tick, 5000);
+
+// --- Internal storage (eMMC): backups and install ---------------------------------------------------------------
+const gb = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1e6))} MB`;
+const CONTENT = { factory: "Bobcat factory system", ours: "LoRaWAN Gateway OS (installed from the card)", empty: "empty", other: "unknown contents" };
+let storageTimer = null, installing = false;
+
+function backupItems(d) {
+  // The "essentials": everything needed to put the eMMC back as it was, without its free space.
+  const items = [["head", "partition table, boot loader, first 16 MiB", 16e6]];
+  for (const p of d.parts) items.push([`p${p.n}`, `partition ${p.n} “${p.name}” (${p.fs === "ext4" ? "used blocks only" : "raw"})`, p.used]);
+  items.push(["tail", "backup partition table", 17e3], ["boot0", "eMMC boot partition 0", 4e6], ["boot1", "eMMC boot partition 1", 4e6]);
+  return items;
+}
+
+function renderStorage(d) {
+  $("storage-card").hidden = !d.available;
+  if (!d.available) return;
+  const inst = d.install || {};
+  installing = inst.state === "running";
+  let h = `<dl>` + dl([
+    ["Running from", d.boot === "sd" ? "the SD card" : d.boot === "emmc" ? "the eMMC" : esc(d.boot)],
+    ["eMMC", d.emmc === "present" ? `${gb(d.emmc_bytes)}, ${esc(CONTENT[d.content] || d.content)}` : "not found"],
+  ]) + `</dl>`;
+
+  if (inst.state === "running") {
+    const pct = inst.steps ? Math.round(100 * (inst.step - 1) / inst.steps) : 0;
+    h += `<p><b>Installing: step ${inst.step} of ${inst.steps}</b>, ${esc(inst.message)}</p><div class="bar"><i style="width:${pct}%"></i></div>` +
+      `<p class="note">Takes a few minutes. Do not power off. The gateway services pause for about a minute while the system is copied.</p>`;
+  } else if (inst.state === "done") {
+    h += `<div class="warnbox"><b>Installed.</b> ${esc(inst.message)}</div>`;
+  } else if (inst.state === "failed") {
+    h += `<div class="badbox"><b>The install failed</b> at step ${inst.step} of ${inst.steps}: ${esc(inst.message)}. ` +
+      `The gateway keeps running from the SD card; the eMMC has no boot loader now, so the card still boots. Details: <span class="mono">journalctl -u bobcat-emmc-install</span>, <span class="mono">/run/bobcat-emmc/log</span>.</div>`;
+  }
+
+  if (d.emmc === "present" && d.content !== "empty" && !installing) {
+    const items = backupItems(d);
+    const total = items.reduce((a, [, , b]) => a + b, 0);
+    h += `<details${d.content === "factory" ? " open" : ""}><summary>Back up the eMMC</summary>` +
+      `<p class="note">Downloads ask for a ChirpStack login (the account you use on port 8080). Back up before installing: the install erases the whole eMMC.</p>` +
+      `<p><b>Essentials</b>: everything needed to put the eMMC back as it is now, without its free space. About ${gb(total)} before compression, a few minutes in total. Keep the files together:</p>` +
+      `<ul class="files">` + items.map(([i, label]) => `<li><a class="dl" href="api/storage/backup/${i}">${esc(i)}</a> ${esc(label)}</li>`).join("") +
+      `<li><a class="dl" href="api/storage/backup/restore">RESTORE.txt</a> how to write them back</li></ul>` +
+      `<p class="note">All at once from a computer (asks for the password):</p>` +
+      `<pre class="mono">read -rsp 'ChirpStack password: ' P; echo\nfor i in ${items.map(([i]) => i).join(" ")} restore; do\n  curl -fOJ -u "admin:$P" http://${esc(location.host)}/api/storage/backup/$i || break\ndone</pre>` +
+      `<p><b>Full raw copy</b>: <a class="dl" href="api/storage/backup/full">full</a>, every sector of the ${gb(d.emmc_bytes)} eMMC, old deleted data included. ` +
+      `<span class="tbad">Takes a long time</span>: 30 minutes to several hours, and up to tens of GB (a used factory eMMC gave 36 GB). Only needed if you want an exact copy.</p>` +
+      `</details>`;
+  }
+
+  if (d.boot === "sd" && d.emmc === "present" && !installing) {
+    h += `<details><summary>Install onto the eMMC</summary>` +
+      `<p>Copies this system, with its settings and ChirpStack data, from the SD card onto the eMMC, and the gateway then runs from there ` +
+      `(the eMMC lasts far longer than a card under constant writes). Layout: two system partitions (A/B, for updates) and a data partition for <span class="mono">/var/lib</span>.</p>` +
+      `<div class="badbox">This <b>erases the whole eMMC</b>${d.content === "factory" ? ", the Bobcat factory system included. Download the backup above first if you may want it back" : ""}.</div>` +
+      `<p class="note">When it is done: power off, take the SD card out, power on. With a card inserted the gateway still starts from the card, so the card stays a way back.</p>` +
+      `<p><label>Type <b>ERASE</b> to confirm: <input type="text" id="erase" autocomplete="off" size="8"></label> ` +
+      `<button class="danger" id="install" disabled>Erase the eMMC and install</button></p><p class="note" id="install-msg"></p></details>`;
+  } else if (d.boot === "emmc") {
+    h += `<p class="note">To reinstall, boot a card with a new image (it starts before the eMMC), then use this page from there.</p>`;
+  }
+
+  const openNow = [...document.querySelectorAll("#storage details")].map(x => x.open);
+  const typed = $("erase") ? $("erase").value : "";
+  $("storage").innerHTML = h;
+  document.querySelectorAll("#storage details").forEach((x, i) => { if (openNow[i] !== undefined) x.open = openNow[i]; });
+  if ($("erase")) {
+    $("erase").value = typed;
+    const sync = () => { $("install").disabled = $("erase").value !== "ERASE"; };
+    $("erase").addEventListener("input", sync); sync();
+    $("install").addEventListener("click", startInstall);
+  }
+}
+
+async function startInstall() {
+  const msg = $("install-msg");
+  $("install").disabled = true;
+  try {
+    // Ask for the login first, with a clear answer for the default password.
+    let r = await fetch("api/storage/login", { cache: "no-store" });
+    if (r.ok) r = await fetch("api/storage/install", { method: "POST", body: "confirm=ERASE",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+    msg.textContent = r.ok ? "Started." : await r.text();
+  } catch (e) { msg.textContent = e.message; }
+  storage();
+}
+
+async function storage() {
+  clearTimeout(storageTimer);
+  try {
+    const r = await fetch("api/storage", { cache: "no-store" });
+    if (r.ok) renderStorage(await r.json());
+  } catch (e) { /* the status card already shows a dead gateway */ }
+  storageTimer = setTimeout(storage, installing ? 2000 : 30000);
+}
+storage();
 </script>
 </body>
 </html>
