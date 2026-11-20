@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
-# Fast checks only. Full image builds need far more than a hosted runner offers and run on the maintainers'
-# build hosts.
+# Checks that fit a hosted runner: linters, unit tests, and bitbake parsing the layers and planning the image's task
+# graph (a dry run, nothing is built). Full image builds need far more than a hosted runner offers and run on the
+# maintainers' build hosts.
 name: ci
 
 on:
@@ -31,6 +32,11 @@ jobs:
           shellcheck tools/*.sh $(git ls-files '*.sh') meta-bobcat/recipes-support/bobcat-emmc/files/bobcat-emmc \
             meta-bobcat/recipes-support/bobcat-rauc/files/bobcat-rauc-post-install
 
+      - name: Recipes (oelint-adv, settings in .oelint.cfg)
+        run: |
+          pipx install oelint-adv==9.14.0
+          oelint-adv $(git ls-files '*.bb' '*.bbappend' '*.bbclass' '*.inc')
+
       - name: Python tools
         run: python3 -m py_compile tools/*.py meta-lorawan/lib/oeqa/runtime/cases/*.py
 
@@ -43,6 +49,40 @@ jobs:
 
       - name: kas files parse
         run: |
-          pipx install kas
+          pipx install kas==5.4
           kas dump kas/bobcat-g285.yml > /dev/null
           kas dump kas/qemuarm64.yml > /dev/null
+
+  # Parses every recipe of the configured layers and resolves the targets' task graphs without running any task. Catches
+  # what breaks a build in its first minute: syntax errors, renamed or removed variables, dangling bbappends, layer
+  # compatibility, missing providers and dependencies, COMPATIBLE_MACHINE and features checks.
+  bitbake:
+    name: bitbake dry run (${{ matrix.config }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: kas/bobcat-g285.yml
+            targets: lorawan-gateway-image lorawan-gateway-bundle
+          - config: kas/qemuarm64.yml
+            targets: lorawan-gateway-image
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up kas-container
+        run: |
+          # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor; bitbake needs them.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          curl -fsSL -o "$RUNNER_TEMP/kas-container" https://raw.githubusercontent.com/siemens/kas/5.4/kas-container
+          chmod +x "$RUNNER_TEMP/kas-container"
+          echo "KAS_WORK_DIR=$RUNNER_TEMP/kas" >> "$GITHUB_ENV"
+
+      # The board's rauc-conf refuses to parse without an update CA certificate (docs/updates.md). These keys exist
+      # only for this job.
+      - name: Throwaway update keys
+        run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
+
+      - name: Parse and dry run
+        run: '"$RUNNER_TEMP/kas-container" shell ${{ matrix.config }} -c "bitbake --dry-run ${{ matrix.targets }}"'

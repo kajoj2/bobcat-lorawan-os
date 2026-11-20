@@ -12,6 +12,7 @@ LICENSE = "CLOSED"
 RKWIFIBT_REV = "9a862443dd3ee9b392e240bf920932540748daa0"
 RKWIFIBT_URI = "https://raw.githubusercontent.com/Inspectron/rkwifibt/${RKWIFIBT_REV}/firmware/broadcom/AW-NB197"
 
+# nooelint: oelint.vars.downloadfilename
 SRC_URI = " \
     ${RKWIFIBT_URI}/wifi/nvram_azw372.txt;name=nvram;downloadfilename=rkwifibt-${RKWIFIBT_REV}-nvram_azw372.txt \
     ${RKWIFIBT_URI}/bt/BCM4343A1.hcd;name=hcd;downloadfilename=rkwifibt-${RKWIFIBT_REV}-BCM4343A1.hcd \
@@ -35,4 +36,5 @@ do_install() {
         ${D}${nonarch_base_libdir}/firmware/brcm/BCM43430A1.hcd
 }
 
+# nooelint: oelint.var.filesoverride
 FILES:${PN} = "${nonarch_base_libdir}/firmware/brcm"

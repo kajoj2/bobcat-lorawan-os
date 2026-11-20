@@ -4,6 +4,7 @@
 # builder with tools/rauc-keys.sh; it is never part of this repository.
 
 FILESEXTRAPATHS:prepend:bobcat := "${THISDIR}/files:"
+# nooelint: oelint.vars.fileextrapathsop
 FILESEXTRAPATHS:prepend:bobcat = "${BOBCAT_RAUC_KEY_DIR}:"
 
 RAUC_KEYRING_FILE:bobcat = "ca.cert.pem"
@@ -12,6 +13,7 @@ do_install:append:bobcat() {
     sed -i -e 's|@MACHINE@|${MACHINE}|g' ${D}${nonarch_libdir}/rauc/system.conf
 }
 
+# nooelint: oelint.vars.noncoreoverride
 python () {
     if 'bobcat' not in (d.getVar('MACHINEOVERRIDES') or '').split(':'):
         return

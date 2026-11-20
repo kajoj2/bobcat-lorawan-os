@@ -9,6 +9,7 @@ IMAGE_FEATURES += "ssh-server-openssh"
 # Access: the root account has an empty password, which only the local consoles (serial, USB gadget) accept;
 # sshd takes keys only (lorawan-gateway-config). Put your public key(s) into LORAWAN_SSH_AUTHORIZED_KEYS (one
 # string, keys separated by newlines) in local.conf or a kas overlay to log in over the network.
+# nooelint: oelint.var.badimagefeature.empty-root-password
 IMAGE_FEATURES += "empty-root-password"
 LORAWAN_SSH_AUTHORIZED_KEYS ??= ""
 

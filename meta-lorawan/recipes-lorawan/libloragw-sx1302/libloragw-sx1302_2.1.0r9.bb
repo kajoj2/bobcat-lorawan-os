@@ -29,6 +29,7 @@ do_install() {
 }
 
 PACKAGES =+ "${PN}-utils"
+# nooelint: oelint.var.filesoverride
 FILES:${PN}-utils = "${bindir}/sx1302-chip-id"
 # Static libraries only; the -staticdev package is what Concentratord builds against.
 ALLOW_EMPTY:${PN} = "1"

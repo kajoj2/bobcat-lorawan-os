@@ -38,6 +38,7 @@ export BINDGEN_EXTRA_CLANG_ARGS = "--sysroot=${STAGING_DIR_TARGET} --target=${TA
 # the fetched sources. Like upstream's OpenWrt package, it takes the published gRPC-web API package of the same
 # version instead of generating it from the .proto files.
 PNPM_VERSION = "10.34.9"
+# nooelint: oelint.task.network
 do_compile_ui[network] = "1"
 do_compile_ui[dirs] = "${S}/ui"
 do_compile_ui() {
@@ -60,7 +61,7 @@ do_install:append() {
 }
 
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM:${PN} = "--system --home-dir /var/lib/chirpstack --no-create-home --shell /sbin/nologin chirpstack"
+USERADD_PARAM:${PN} = "--system --home-dir ${localstatedir}/lib/chirpstack --no-create-home --shell /sbin/nologin chirpstack"
 
 SYSTEMD_SERVICE:${PN} = "chirpstack.service"
 RDEPENDS:${PN} += "redis mosquitto"
