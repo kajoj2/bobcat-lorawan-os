@@ -91,6 +91,19 @@ marks them good. A gateway gets it once by hand:
   partition and the new root file system into one slot; see the project's notes for the steps. Until then, the
   older U-Boot starts whichever system partition has the bootable attribute.
 
+## Tested on a board (2026-11-20)
+
+G285 on the eMMC, both slots and U-Boot from this repository:
+
+- U-Boot started slot A by itself (`rauc.slot=A`), saved its environment, `rauc-mark-good` set `BOOT_A_LEFT`
+  back to 3; `/var/lib` on the data partition; same IP addresses, all services up.
+- `rauc install` of a bundle (109 MB): signature checked, slot B written (about a minute), the post-install
+  handler carried the settings over, `BOOT_ORDER=B A`. After a restart: slot B, marked good, same addresses.
+- Fallback: with the panel switched off on B (`systemctl mask lorawan-agent`), three starts of B used up its
+  tries (2, 1, 0) and the fourth start was slot A, marked good. `rauc status mark-active other` and a restart went
+  back to B.
+- The panel's upload refused with 403 while ChirpStack still had admin/admin, as intended.
+
 ## Limits
 
 - The boot loader itself is not updated by a bundle (a failed write there has no way back without a card).

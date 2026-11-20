@@ -17,7 +17,7 @@ Share the gateway with public networks next to the local ChirpStack (docs/forwar
 
 Steps:
 1. Semtech UDP to The Things Network or any UDP server, chosen on the panel (chirpstack-udp-forwarder 4.3.1).
-   Written 2026-11-20; board test with TTN still to do.
+   Tested on a board with TTN eu1 2026-11-20.
 2. LoRa Basics Station (TLS, API key) for TTN instead of UDP: needs a Basics Station client for Concentratord's
    ZeroMQ API (none exists; Semtech's `station` drives the radio itself, which Concentratord already owns): the
    protocol's timing (`xtime`, RX1/RX2 choice) is the hard part.
@@ -71,8 +71,8 @@ Install (done 2026-11-20, docs/flashing.md, "Install onto the eMMC"):
 - `bobcat-emmc` (meta-bobcat) with a page on the panel: eMMC backups (essentials with only used blocks, or a full
   raw copy) and an install that writes idbloader, U-Boot and an A/B layout (`system_a`, `system_b`, `data` on
   `/var/lib`) from the running card. U-Boot tries the card first (`boot_targets=mmc1 mmc0`), so a card still wins.
-- A/B updates with RAUC from the panel (docs/updates.md), written 2026-11-20; board test pending. Still open: a
-  read-only root file system.
+- A/B updates with RAUC from the panel (docs/updates.md), tested on a board 2026-11-20 (install into the other
+  slot, restart, fall back after three failed starts). Still open: a read-only root file system.
 
 Local history:
 - ChirpStack keeps only recent frames. For days/months of sensor values on the gateway itself: decoded uplinks
