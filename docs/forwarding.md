@@ -49,7 +49,7 @@ To turn it off, untick everything and Save.
 |---|---|
 | `/etc/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml` | Fixed part: log level, metrics, Concentratord's sockets. |
 | `/var/lib/lorawan-forward/servers.toml` | Server list, written by the panel (`[[udp_forwarder.servers]]`). On the data partition, so it survives updates. |
-| `chirpstack-udp-forwarder.service` | Enabled, but skipped (`ConditionPathExists`) while there is no server list. Started, restarted and stopped by the panel. |
+| `chirpstack-udp-forwarder.service` | Enabled, but skipped (`ConditionPathExists`) while there is no server list. Started, restarted and stopped by the panel. Waits for Concentratord's command socket before starting the forwarder. |
 
 The same from a shell, without the panel: write `servers.toml` in the format the panel uses (see
 `lorawan-agent/src/forward.rs`, `render`), then `systemctl restart chirpstack-udp-forwarder`. Logs:
