@@ -71,7 +71,7 @@ jobs:
       # keeps the cache from growing without bound. Only runs on main, the schedule and manual runs save it; pull
       # requests (forks included) only read it.
       - name: Restore shared state cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
           key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
@@ -80,7 +80,7 @@ jobs:
       # Downloaded sources, so that a flaky upstream server (gmplib.org, savannah) does not fail a build. Same rules
       # as the shared state.
       - name: Restore downloads cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/downloads
           key: downloads-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
@@ -91,14 +91,14 @@ jobs:
 
       - name: Save shared state cache
         if: (success() || failure()) && github.event_name != 'pull_request'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
           key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
 
       - name: Save downloads cache
         if: (success() || failure()) && github.event_name != 'pull_request'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/downloads
           key: downloads-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
