@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 # One stage of the staged full build (full-build.yml): restores the shared state of the earlier stages of this run,
 # builds the given targets, and uploads only the shared state files this stage added, as artifact
-# sstate-<name>-<attempt>.
+# sstate-<name>-<attempt>. The files go up as one uncompressed tar: shared state file names contain colons, which
+# upload-artifact refuses.
 # The build step has its own time limit below the job's, so the upload still runs when a stage runs out of time; a
 # rerun of the failed jobs then continues from there.
 name: stage
@@ -84,8 +85,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: sstate-*
-          path: ${{ env.SSTATE }}
+          path: ${{ runner.temp }}/earlier
           merge-multiple: true
+
+      - name: Unpack the earlier stages' shared state
+        run: |
+          mkdir -p "$SSTATE"
+          for t in "$RUNNER_TEMP"/earlier/*.tar; do
+            [ -e "$t" ] || continue
+            echo "$t: $(du -h "$t" | cut -f1)"
+            tar -xf "$t" -C "$SSTATE"
+            rm "$t"
+          done
 
       - name: Build
         timeout-minutes: ${{ inputs.build-minutes }}
@@ -101,7 +112,11 @@ jobs:
           wc -l < "$RUNNER_TEMP/new-files"
           xargs -r -a "$RUNNER_TEMP/new-files" du -ch | tail -n 1
           mkdir -p "$RUNNER_TEMP/upload"
-          rsync -a --files-from="$RUNNER_TEMP/new-files" . "$RUNNER_TEMP/upload/"
+          if [ -s "$RUNNER_TEMP/new-files" ]; then
+            tar -cf "$RUNNER_TEMP/upload/sstate-${{ inputs.name }}-${{ github.run_attempt }}.tar" \
+              -T "$RUNNER_TEMP/new-files"
+            du -h "$RUNNER_TEMP"/upload/*.tar
+          fi
 
       - name: Upload this stage's shared state
         if: success() || failure() || cancelled()
