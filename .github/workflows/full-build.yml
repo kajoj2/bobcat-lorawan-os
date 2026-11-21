@@ -33,7 +33,7 @@ jobs:
       - id: lock
         run: echo "hash=${{ hashFiles('kas/bobcat-g285.lock.yml') }}" >> "$GITHUB_OUTPUT"
 
-  # Cross toolchain, kernel, U-Boot: the same targets as the build workflow, starting from its cache.
+  # Cross toolchain, kernel, U-Boot: the same targets as the build workflow.
   toolchain:
     needs: prepare
     uses: ./.github/workflows/stage.yml
@@ -42,7 +42,6 @@ jobs:
       targets: >-
         virtual/kernel virtual/bootloader libloragw-sx1302:do_package_qa bobcat-emmc:do_package_qa
         bobcat-rauc:do_package_qa bobcat-wifibt-firmware:do_package_qa
-      cache-restore: sstate-board-${{ needs.prepare.outputs.lock }}-
       lock-hash: ${{ needs.prepare.outputs.lock }}
 
   # The Rust toolchain (LLVM, rust, cargo, the target's std) through the smallest Rust recipe, and clang (bindgen in
@@ -65,6 +64,18 @@ jobs:
       lock-hash: ${{ needs.prepare.outputs.lock }}
       targets: nodejs-native
 
+  # The rest of the image's packages: nothing here needs Rust or Node.js. lorawan-gateway-config is left out, as it
+  # depends on chirpstack at run time.
+  userland:
+    needs: [prepare, toolchain]
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 2-userland
+      lock-hash: ${{ needs.prepare.outputs.lock }}
+      targets: >-
+        packagegroup-core-boot packagegroup-core-ssh-openssh mosquitto redis avahi libgpiod i2c-tools ethtool htop
+        nano zstd
+
   # ChirpStack and its companions. chirpstack's link (LTO) is the heaviest task of the build.
   chirpstack:
     needs: [prepare, rust, nodejs]
@@ -78,9 +89,68 @@ jobs:
 
   # The rest of the userland, the image and the update bundle (signed with the throwaway CI keys).
   image:
-    needs: [prepare, chirpstack]
+    needs: [prepare, chirpstack, userland]
     uses: ./.github/workflows/stage.yml
     with:
       name: 4-image
       lock-hash: ${{ needs.prepare.outputs.lock }}
       targets: lorawan-gateway-image lorawan-gateway-bundle
+
+  # All of this run's shared state, on top of the cache it started from, becomes the next run's starting point
+  # (stage.yml restores it). Kept even when a stage failed: what was built is still valid. Pull requests only read
+  # it, like the build workflow's cache. Only the newest one is kept: two would not fit in the repository's 10 GB.
+  save-cache:
+    needs: [prepare, toolchain, rust, nodejs, userland, chirpstack, image]
+    if: >-
+      !cancelled() && needs.prepare.result == 'success' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: write
+    env:
+      SSTATE: ${{ github.workspace }}/sstate-cache
+      KEY: sstate-full-${{ needs.prepare.outputs.lock }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Restore the shared state cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.SSTATE }}
+          key: sstate-full-${{ needs.prepare.outputs.lock }}-
+          restore-keys: |
+            sstate-full-${{ needs.prepare.outputs.lock }}-
+            sstate-board-${{ needs.prepare.outputs.lock }}-
+
+      - name: Shared state of all stages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sstate-*
+          path: ${{ runner.temp }}/stages
+          merge-multiple: true
+
+      - name: Unpack
+        run: |
+          for t in "$RUNNER_TEMP"/stages/*.tar; do
+            [ -e "$t" ] || continue
+            tar -xf "$t" -C "$SSTATE"
+            rm "$t"
+          done
+          du -sh "$SSTATE"
+
+      - name: Save the shared state cache
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.SSTATE }}
+          key: ${{ env.KEY }}
+
+      - name: Delete older full build caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" --key sstate-full- --limit 100 --json id,key \
+            --jq ".[] | select(.key != \"$KEY\") | .id" |
+            xargs -r -n 1 gh cache delete -R "$GITHUB_REPOSITORY"
