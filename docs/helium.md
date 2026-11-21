@@ -3,7 +3,8 @@
 
 The gateway can also serve the [Helium](https://www.helium.com/) IoT network, next to the local ChirpStack and The
 Things Network. It joins Helium as a new **data-only hotspot** with a key of its own, which you onboard with your
-own wallet. Not tested on a board yet.
+own wallet. Tried on a board on 2026-11-21: it starts from the panel, makes its key, holds a session with Helium's
+packet router and gets EU868 from the network; onboarding itself is not tried yet.
 
 ```
                                  ┌── ChirpStack MQTT Forwarder ── ChirpStack (local)
@@ -97,8 +98,9 @@ systemd gives the file to the service's user when it starts. If a new key was ma
 
 ## Limits
 
-- Not tried on a board yet: the recipe builds (the first build will tell), the onboarding steps follow the tools'
-  current help texts.
+- The onboarding steps follow the tools' current help texts; not tried yet.
+- PoC is off, yet the Helium gateway still tries to reach the PoC ingest service and logs a warning
+  (`beaconer: failed to reconnect`) when it cannot; harmless.
 - Upstream's last release is from 2023 and main has had few changes since; Helium may change its services.
 - One radio for all networks: Helium's downlinks share the transmitter and the duty cycle with the others.
 - The card's onboarding hints need no login, like the rest of the community networks card; the key itself never

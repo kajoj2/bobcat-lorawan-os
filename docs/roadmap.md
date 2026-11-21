@@ -23,7 +23,7 @@ Steps:
    protocol's timing (`xtime`, RX1/RX2 choice) is the hard part.
 3. Helium as a data-only hotspot with its own key in a file (docs/helium.md): the Helium gateway (`gateway-rs`)
    takes Semtech UDP locally; chosen on the panel. Not the factory key in the ATECC608: that hotspot belongs to the
-   wallet that onboarded it. Written 2026-11-21, not built or tried on a board yet.
+   wallet that onboarded it. Built and running on a board 2026-11-21 (router session, EU868); onboarding next.
 
 Open: a white LED flash per forwarded frame (with item 7); a per-network JoinEUI/DevAddr filter, if anyone needs one.
 
