@@ -6,9 +6,12 @@ An open-source Yocto Linux image that turns a retired **Bobcat Miner 300** Heliu
 sensors work on your LAN without any cloud service. Its MQTT integration feeds Home Assistant, Node-RED or anything
 else that speaks MQTT.
 
-> **Status: pre-alpha, not yet booted on hardware.** The image builds (Yocto 6.0, 68 MB compressed); the first
-> board is on its way. Do not flash it expecting a working gateway yet. See [docs/bringup-checklist.md](docs/bringup-checklist.md)
-> for what has to be verified, and [CHANGELOG.md](CHANGELOG.md) for progress.
+> **Status: alpha, running on hardware.** A G285 board runs it as a gateway: the radio receives and sends, a real
+> LoRaWAN node joins the local ChirpStack, frames are forwarded to The Things Network, and the system installs onto
+> the eMMC and updates itself A/B from the web panel. No release yet; build it yourself. Still open: a card install
+> reported from an untouched Bobcat (tested with Rockchip's own boot loader standing in for the factory one).
+> What was checked on the board: [docs/bringup-checklist.md](docs/bringup-checklist.md);
+> progress: [CHANGELOG.md](CHANGELOG.md).
 
 This project is not affiliated with, endorsed by or supported by Bobcat or its manufacturer. "Bobcat" is used only
 to say which hardware the image runs on.
@@ -20,7 +23,7 @@ to say which hardware the image runs on.
 | Supported | Bobcat Miner 300, board revision **G285** (serial number starts with `285`), EU868 |
 | SoC | Rockchip RK3566, 4x Cortex-A55, 2 GB LPDDR4X, 64 GB eMMC |
 | Radio | SX1302 + 2x SX1250 on a mini-PCIe style card (SPI) |
-| Network | 100 Mbit Ethernet; BCM43430 Wi-Fi/Bluetooth (not used yet) |
+| Network | 100 Mbit Ethernet, BCM43430 Wi-Fi (WPA2/WPA3 client); Bluetooth works but is not used yet |
 | Planned | G280, G290/G295 (other RK3566 revisions), US915 |
 
 Hardware notes, each fact with its source: [docs/hardware-g285.md](docs/hardware-g285.md).
@@ -44,7 +47,8 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 
 The image boots from a **microSD card** and does not touch the eMMC: remove the card and the factory firmware
-boots again.
+boots again. Once it works for you, the web panel can back up the eMMC and install the system onto it (A/B layout,
+the card is no longer needed): [docs/flashing.md](docs/flashing.md).
 
 ## Build
 
