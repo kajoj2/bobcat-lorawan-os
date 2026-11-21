@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MIT
+# A release from a tag v*: the full build (full-build.yml) with the project's update CA built into the image, then,
+# once a maintainer approves the release environment, the update bundle signed with the project's key, provenance
+# attestations, and a GitHub release with the image and the bundle (docs/releasing.md).
+#
+# Settings it needs:
+# - variable RAUC_CA_CERT: the update CA certificate (ca.cert.pem), public; the image only takes bundles signed
+#   under it
+# - environment release, with the maintainers as required reviewers and only v* tags allowed to deploy, holding
+#   secret RAUC_SIGNING_KEY (key.pem) and variable RAUC_SIGNING_CERT (cert.pem, issued by that CA)
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Update CA certificate
+        env:
+          CA_CERT: ${{ vars.RAUC_CA_CERT }}
+        run: |
+          if [ -z "$CA_CERT" ]; then
+            echo "::error::Variable RAUC_CA_CERT is not set: a release image needs the project's update CA"
+            exit 1
+          fi
+          printf '%s\n' "$CA_CERT" | openssl x509 -noout -subject -enddate
+
+  build:
+    needs: check
+    uses: ./.github/workflows/full-build.yml
+    with:
+      release: true
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+      attestations: write
+    env:
+      BUNDLE: images/lorawan-gateway-bundle-bobcat-g285.raucb
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: images
+          path: images
+
+      - name: Install RAUC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rauc > /dev/null
+          rauc --version
+
+      # The build signed the bundle with its throwaway key. The key only exists in this step, in a directory
+      # nobody else on the runner can read, and is removed before the step ends.
+      - name: Sign the update bundle
+        env:
+          KEY: ${{ secrets.RAUC_SIGNING_KEY }}
+          CERT: ${{ vars.RAUC_SIGNING_CERT }}
+          CA_CERT: ${{ vars.RAUC_CA_CERT }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$CERT" ]; then
+            echo "::error::Environment release needs secret RAUC_SIGNING_KEY and variable RAUC_SIGNING_CERT"
+            exit 1
+          fi
+          keys=$(mktemp -d)
+          trap 'rm -rf "$keys"' EXIT
+          (
+            umask 077
+            printf '%s\n' "$KEY" > "$keys/key.pem"
+            printf '%s\n' "$CERT" > "$keys/cert.pem"
+            printf '%s\n' "$CA_CERT" > "$keys/ca.cert.pem"
+          )
+          rauc resign --no-verify --key "$keys/key.pem" --cert "$keys/cert.pem" --keyring "$keys/ca.cert.pem" \
+            "$BUNDLE" "$keys/signed.raucb"
+          # What a gateway checks before installing
+          rauc info --keyring "$keys/ca.cert.pem" "$keys/signed.raucb"
+          mv "$keys/signed.raucb" "$BUNDLE"
+
+      - name: Checksums
+        working-directory: images
+        run: sha256sum -- * | tee SHA256SUMS
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: images/*
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" images/* -R "$GITHUB_REPOSITORY" --verify-tag \
+            --title "LoRaWAN Gateway OS $GITHUB_REF_NAME" --generate-notes

@@ -38,6 +38,10 @@ on:
         description: The last stage, which uploads the images and the whole shared state for later runs
         type: boolean
         default: false
+      ca-cert:
+        description: Update CA certificate (PEM) to build into the image instead of the throwaway one, for a release
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -71,8 +75,16 @@ jobs:
           echo "KAS_WORK_DIR=$RUNNER_TEMP/kas" >> "$GITHUB_ENV"
           echo "SSTATE=$RUNNER_TEMP/kas/build/sstate-cache" >> "$GITHUB_ENV"
 
+      # A release image carries the project's update CA instead; its bundle is signed again by release.yml.
       - name: Throwaway update keys
-        run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
+        env:
+          CA_CERT: ${{ inputs.ca-cert }}
+        run: |
+          tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
+          if [ -n "$CA_CERT" ]; then
+            printf '%s\n' "$CA_CERT" > "$KAS_WORK_DIR/rauc-keys/ca.cert.pem"
+            openssl x509 -in "$KAS_WORK_DIR/rauc-keys/ca.cert.pem" -noout -subject -enddate
+          fi
 
       # The shared state of an earlier full build (full-build.yml's prepare job finds it), so that only what changed
       # since is built; or else the build workflow's cache.

@@ -83,6 +83,5 @@ changed. The weekly `updates` workflow starts it on the lock pull request, so a 
 builds, and main's next run starts from that shared state. Shared state is only taken from and kept by runs in this
 repository, never by a pull request from a fork. A stage that runs out of time keeps what it built, and "Re-run failed
 jobs" continues from there. The `images` artifact is for a board test: its bundle is signed with the run's throwaway
-keys. The image, the update bundle and the QEMU tests (docs/testing.md) are built on a maintainer's build host before
-a release.
+keys. Releases come from a tag (docs/releasing.md); the QEMU tests (docs/testing.md) run on a maintainer's build host.
 
