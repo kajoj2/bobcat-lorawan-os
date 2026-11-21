@@ -40,14 +40,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     steps:
-      # The runner has ~14 GB free; a toolchain, kernel and U-Boot build needs about 40 GB.
-      - name: Free disk space
+      # The build needs about 25 GB (first run: tmp 19 GB with rm_work, sstate and downloads 1.3 GB each). Runners
+      # have had from ~14 GB to ~90 GB free; remove the preinstalled SDKs only when space is short (takes 2 min).
+      - name: Free disk space if needed
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
-            /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
-          sudo docker image prune --all --force > /dev/null
-          df -h /
+          if [ "$(df --output=avail -BG / | tail -n 1 | tr -dc 0-9)" -lt 60 ]; then
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+              /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
+            sudo docker image prune --all --force > /dev/null
+            df -h /
+          fi
 
       - uses: actions/checkout@v5
 
@@ -68,21 +71,37 @@ jobs:
       # keeps the cache from growing without bound. Only runs on main, the schedule and manual runs save it; pull
       # requests (forks included) only read it.
       - name: Restore shared state cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
           key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
           restore-keys: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-
+
+      # Downloaded sources, so that a flaky upstream server (gmplib.org, savannah) does not fail a build. Same rules
+      # as the shared state.
+      - name: Restore downloads cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.KAS_WORK_DIR }}/build/downloads
+          key: downloads-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
+          restore-keys: downloads-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-
 
       - name: Build
         run: '"$RUNNER_TEMP/kas-container" build kas/ci-board.yml'
 
       - name: Save shared state cache
         if: (success() || failure()) && github.event_name != 'pull_request'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/sstate-cache
           key: sstate-board-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
+
+      - name: Save downloads cache
+        if: (success() || failure()) && github.event_name != 'pull_request'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.KAS_WORK_DIR }}/build/downloads
+          key: downloads-${{ hashFiles('kas/bobcat-g285.lock.yml') }}-${{ github.sha }}
 
       - name: Build statistics
         if: success() || failure()

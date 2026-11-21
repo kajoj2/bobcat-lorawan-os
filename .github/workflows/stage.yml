@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: MIT
+# One stage of the staged full build (full-build.yml): restores the shared state of the earlier stages of this run,
+# builds the given targets, and uploads only the shared state files this stage added, as artifact
+# sstate-<name>-<attempt>. The files go up as one uncompressed tar: shared state file names contain colons, which
+# upload-artifact refuses.
+# The build step has its own time limit below the job's, so the upload still runs when a stage runs out of time; a
+# rerun of the failed jobs then continues from there.
+name: stage
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: Stage name, also the artifact suffix
+        type: string
+        required: true
+      targets:
+        description: BitBake targets (recipe or recipe:do_task)
+        type: string
+        required: true
+      build-minutes:
+        description: Time limit of the build step
+        type: number
+        default: 300
+      cache-restore:
+        description: Actions cache key prefix to start from (the build workflow's sstate cache), or empty
+        type: string
+        default: ""
+      lock-hash:
+        description: hashFiles of the lock file, for the build workflow's downloads cache
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ inputs.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      # A stage needs up to ~50 GB (the image stage: all shared state plus the rootfs). Runners
+      # have had from ~14 GB to ~90 GB free; remove the preinstalled SDKs only when space is short (takes 2 min).
+      - name: Free disk space if needed
+        run: |
+          df -h /
+          if [ "$(df --output=avail -BG / | tail -n 1 | tr -dc 0-9)" -lt 60 ]; then
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+              /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google
+            sudo docker image prune --all --force > /dev/null
+            df -h /
+          fi
+
+      - uses: actions/checkout@v5
+
+      - name: Set up kas-container
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          curl -fsSL -o "$RUNNER_TEMP/kas-container" https://raw.githubusercontent.com/siemens/kas/5.4/kas-container
+          chmod +x "$RUNNER_TEMP/kas-container"
+          echo "KAS_WORK_DIR=$RUNNER_TEMP/kas" >> "$GITHUB_ENV"
+          echo "SSTATE=$RUNNER_TEMP/kas/build/sstate-cache" >> "$GITHUB_ENV"
+
+      - name: Throwaway update keys
+        run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
+
+      - name: Restore the build workflow's cache
+        if: inputs.cache-restore != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.SSTATE }}
+          key: ${{ inputs.cache-restore }}
+          restore-keys: ${{ inputs.cache-restore }}
+
+      - name: Restore the build workflow's downloads cache
+        if: inputs.lock-hash != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.KAS_WORK_DIR }}/build/downloads
+          key: downloads-${{ inputs.lock-hash }}-
+          restore-keys: downloads-${{ inputs.lock-hash }}-
+
+      - name: Shared state of the earlier stages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sstate-*
+          path: ${{ runner.temp }}/earlier
+          merge-multiple: true
+
+      - name: Unpack the earlier stages' shared state
+        run: |
+          mkdir -p "$SSTATE"
+          for t in "$RUNNER_TEMP"/earlier/*.tar; do
+            [ -e "$t" ] || continue
+            echo "$t: $(du -h "$t" | cut -f1)"
+            tar -xf "$t" -C "$SSTATE"
+            rm "$t"
+          done
+
+      - name: Build
+        timeout-minutes: ${{ inputs.build-minutes }}
+        run: |
+          mkdir -p "$SSTATE" && touch "$RUNNER_TEMP/stage-start"
+          "$RUNNER_TEMP/kas-container" shell kas/ci-board.yml -c "bitbake ${{ inputs.targets }}"
+
+      - name: Collect this stage's shared state
+        if: success() || failure() || cancelled()
+        run: |
+          cd "$SSTATE"
+          find . -type f -newer "$RUNNER_TEMP/stage-start" ! -name '*.siginfo' > "$RUNNER_TEMP/new-files"
+          wc -l < "$RUNNER_TEMP/new-files"
+          xargs -r -a "$RUNNER_TEMP/new-files" du -ch | tail -n 1
+          mkdir -p "$RUNNER_TEMP/upload"
+          if [ -s "$RUNNER_TEMP/new-files" ]; then
+            tar -cf "$RUNNER_TEMP/upload/sstate-${{ inputs.name }}-${{ github.run_attempt }}.tar" \
+              -T "$RUNNER_TEMP/new-files"
+            du -h "$RUNNER_TEMP"/upload/*.tar
+          fi
+
+      - name: Upload this stage's shared state
+        if: success() || failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          # One artifact per attempt: a rerun adds to what an attempt that ran out of time uploaded.
+          name: sstate-${{ inputs.name }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/upload
+          # Shared state archives are compressed already.
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Build statistics
+        if: success() || failure() || cancelled()
+        run: |
+          df -h /
+          du -sh "$SSTATE" "$KAS_WORK_DIR"/build/downloads "$KAS_WORK_DIR"/build/tmp 2>/dev/null || true
+          tail -n 30 "$KAS_WORK_DIR"/build/tmp/buildstats/*/build_stats 2>/dev/null || true
