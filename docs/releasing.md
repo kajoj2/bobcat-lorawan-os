@@ -8,7 +8,7 @@ A tag `v*` starts `.github/workflows/release.yml`:
    deployments"). Look at the build first: the `images` artifact can go onto a board before you approve.
 3. Once approved: the update bundle is signed again with the project's key (`rauc resign`) and checked against the
    CA, `SHA256SUMS` is written, every file gets a build provenance attestation, and the GitHub release is published
-   with notes from the merged pull requests.
+   with notes from the merged pull requests. A tag with a suffix (`v0.1.0-rc1`) makes a pre-release.
 
 ```sh
 git tag -a v0.1.0 -m "LoRaWAN Gateway OS 0.1.0"

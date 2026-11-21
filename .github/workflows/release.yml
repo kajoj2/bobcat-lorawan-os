@@ -85,10 +85,15 @@ jobs:
             printf '%s\n' "$CERT" > "$keys/cert.pem"
             printf '%s\n' "$CA_CERT" > "$keys/ca.cert.pem"
           )
-          rauc resign --no-verify --key "$keys/key.pem" --cert "$keys/cert.pem" --keyring "$keys/ca.cert.pem" \
+          # The keyring as the gateway has it (meta-bobcat's system.conf): RAUC checks the new signature against it,
+          # and the signing certificate is for code signing, not RAUC's default S/MIME purpose.
+          printf '%s\n' '[system]' 'compatible=bobcat-g285' 'bootloader=noop' \
+            '[keyring]' 'path=ca.cert.pem' 'check-purpose=codesign' > "$keys/system.conf"
+          # --no-verify: the bundle's current signature is the build's throwaway one
+          rauc --conf="$keys/system.conf" resign --no-verify --key "$keys/key.pem" --cert "$keys/cert.pem" \
             "$BUNDLE" "$keys/signed.raucb"
           # What a gateway checks before installing
-          rauc info --keyring "$keys/ca.cert.pem" "$keys/signed.raucb"
+          rauc --conf="$keys/system.conf" info "$keys/signed.raucb"
           mv "$keys/signed.raucb" "$BUNDLE"
 
       - name: Checksums
@@ -103,5 +108,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" images/* -R "$GITHUB_REPOSITORY" --verify-tag \
+          # A tag with a suffix (v0.1.0-rc1) is a pre-release
+          case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre= ;; esac
+          gh release create "$GITHUB_REF_NAME" images/* -R "$GITHUB_REPOSITORY" --verify-tag $pre \
             --title "LoRaWAN Gateway OS $GITHUB_REF_NAME" --generate-notes
