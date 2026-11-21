@@ -67,7 +67,7 @@ jobs:
 
       - name: Restore the build workflow's cache
         if: inputs.cache-restore != ''
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.SSTATE }}
           key: ${{ inputs.cache-restore }}
@@ -75,14 +75,14 @@ jobs:
 
       - name: Restore the build workflow's downloads cache
         if: inputs.lock-hash != ''
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.KAS_WORK_DIR }}/build/downloads
           key: downloads-${{ inputs.lock-hash }}-
           restore-keys: downloads-${{ inputs.lock-hash }}-
 
       - name: Shared state of the earlier stages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: sstate-*
           path: ${{ runner.temp }}/earlier
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload this stage's shared state
         if: success() || failure() || cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # One artifact per attempt: a rerun adds to what an attempt that ran out of time uploaded.
           name: sstate-${{ inputs.name }}-${{ github.run_attempt }}
