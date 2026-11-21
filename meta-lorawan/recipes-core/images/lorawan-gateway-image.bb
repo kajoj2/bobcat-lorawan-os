@@ -21,6 +21,7 @@ IMAGE_INSTALL += " \
     chirpstack-concentratord \
     chirpstack-mqtt-forwarder \
     chirpstack-udp-forwarder \
+    helium-gateway \
     libloragw-sx1302-utils \
     mosquitto \
     mosquitto-clients \

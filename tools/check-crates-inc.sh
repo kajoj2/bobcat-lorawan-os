@@ -22,6 +22,13 @@ for inc in $(git ls-files 'meta-*/*-crates.inc'); do
         status=1
         continue
     fi
+    # Git dependencies (comments at the end of the .inc): the recipe must fetch each at the same revision.
+    for dep_rev in $(sed -n 's|^# git: [^ ]* [^ ]* \([0-9a-f]\{40\}\)$|\1|p' "$inc" | sort -u); do
+        grep -q "^SRCREV_[A-Za-z0-9_-]* = \"$dep_rev\"" "$bb" || {
+            echo "$bb: no SRCREV_<name> for git dependency revision $dep_rev (listed in $inc)"
+            status=1
+        }
+    done
     if tools/cargo-crates-inc.py "https://raw.githubusercontent.com/$repo/$rev/Cargo.lock" "$name" | diff -u "$inc" -; then
         echo "$inc: matches $repo@${rev%"${rev#????????????}"}"
     else

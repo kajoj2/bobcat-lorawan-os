@@ -82,6 +82,12 @@ pub fn units() -> Vec<&'static str> {
     // Optional: only watched once the panel has a server list for it.
     if Path::new(crate::forward::FILE).exists() {
         u.push(crate::forward::UNIT);
+        if crate::forward::configured()
+            .iter()
+            .any(|s| s == crate::forward::HELIUM)
+        {
+            u.push(crate::forward::HELIUM_UNIT);
+        }
     }
     u
 }

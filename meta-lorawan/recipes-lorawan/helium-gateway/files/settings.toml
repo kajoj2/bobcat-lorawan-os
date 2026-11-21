@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT
+# Helium gateway (gateway-rs) as a data-only hotspot; see docs/helium.md. Values from upstream's
+# config/settings.toml, except the key path, the region, PoC off and timestamps left to the journal.
+
+# The gateway's own Ed25519 key, created on the first start, on the data partition (survives updates).
+# Losing it means onboarding a new hotspot: back it up (docs/helium.md).
+keypair = "/var/lib/helium-gateway/gateway_key.bin"
+
+# Semtech UDP from chirpstack-udp-forwarder (the panel adds this address to its server list).
+listen = "127.0.0.1:1680"
+
+# Local gRPC API for `helium_gateway info` and `helium_gateway add`; localhost only.
+api = "127.0.0.1:4467"
+
+# Used until the Helium network answers with the region of the asserted location. Must match Concentratord's.
+region = "@REGION@"
+
+[log]
+level = "info"
+timestamp = false
+
+[poc]
+# A data-only hotspot earns nothing for beacons and witnesses; no needless transmissions.
+disable = true
+entropy_uri = "http://entropy.iot.mainnet.helium.io:7080"
+ingest_uri = "http://mainnet-pociot.helium.io:9080"
+
+[config]
+pubkey = "137oJzq1qZpSbzHawaysTGGsRCYTXG1MiTMQNxYSsQJp4YMDdN8"
+uri = "http://mainnet-config.helium.io:6080/"
+
+[router]
+uri = "http://mainnet-router.helium.io:8080/"
+queue = 20

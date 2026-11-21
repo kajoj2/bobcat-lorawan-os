@@ -40,6 +40,7 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
   start: [docs/updates.md](docs/updates.md). Each builder signs with its own keys (`tools/rauc-keys.sh`).
 - Optional, off by default: **UDP Forwarder 4.3.1** shares the gateway with [The Things Network](https://www.thethingsnetwork.org/)
   or another community network next to the local ChirpStack, set on the web panel: [docs/forwarding.md](docs/forwarding.md).
+  The same card turns the gateway into a **Helium** data-only hotspot with its own key: [docs/helium.md](docs/helium.md).
 - systemd, systemd-networkd (DHCP on Ethernet), OpenSSH (keys only), Avahi (`*.local`).
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 

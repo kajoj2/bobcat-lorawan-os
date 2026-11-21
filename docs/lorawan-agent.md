@@ -41,7 +41,10 @@ check without logging in:
   counters on `127.0.0.1:9800`, the TTN presets, whether ChirpStack still has admin/admin) and `POST /api/forward`
   with `server=host:port` repeated (up to 4; none turns forwarding off). Neither needs a login for now. It writes `/var/lib/lorawan-forward/servers.toml` (the unit's `StateDirectory`) and restarts or
   stops `chirpstack-udp-forwarder.service`. While a server list exists, that service counts as a gateway service
-  for the health and the LED.
+  for the health and the LED. The Helium preset (`127.0.0.1:1680`, offered when `/usr/bin/helium_gateway` exists)
+  also restarts or stops `helium-gateway.service` (then a gateway service as well); `GET /api/forward` then has a
+  `helium` object with that service's state and, while it runs, the hotspot's address, name and router connection
+  from `helium_gateway info key name router` (docs/helium.md).
 - **eMMC page**: `GET /api/storage` (state, from `bobcat-emmc info`, whether ChirpStack still has admin/admin; no
   login), and behind a login
   `GET /api/storage/login`, `GET /api/storage/backup/<item>` (streams `bobcat-emmc backup <item>` with a file
