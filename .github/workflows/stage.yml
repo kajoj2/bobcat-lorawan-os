@@ -27,7 +27,11 @@ on:
         type: string
         required: true
       sstate-run:
-        description: Run whose artifact sstate-full-<lock-hash> to start from, or empty for the build workflow's cache
+        description: Run whose shared state to start from, or empty for the build workflow's cache
+        type: string
+        default: ""
+      sstate-pattern:
+        description: Artifacts of that run to take
         type: string
         default: ""
       final:
@@ -70,13 +74,14 @@ jobs:
       - name: Throwaway update keys
         run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
 
-      # The whole shared state of an earlier full build with the same lock file (full-build.yml's prepare job finds
-      # it), so that only what changed since is built; or else the build workflow's cache.
+      # The shared state of an earlier full build (full-build.yml's prepare job finds it), so that only what changed
+      # since is built; or else the build workflow's cache.
       - name: Shared state of an earlier full build
         if: inputs.sstate-run != ''
         uses: actions/download-artifact@v8
         with:
-          name: sstate-full-${{ inputs.lock-hash }}
+          pattern: ${{ inputs.sstate-pattern }}
+          merge-multiple: true
           run-id: ${{ inputs.sstate-run }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/full
@@ -165,23 +170,26 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      # All shared state the image needed, for the next runs with the same lock file. Not from pull requests: those
-      # can come from forks, and full-build.yml only takes this artifact from scheduled and manual runs anyway.
+      # All shared state the image needed, for the next runs with the same lock file. Not from a fork's pull request.
       - name: Collect the whole shared state
-        if: inputs.final && success() && github.event_name != 'pull_request'
+        if: >-
+          inputs.final && success() &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: |
           mkdir -p "$RUNNER_TEMP/full-out"
           tar -cf "$RUNNER_TEMP/full-out/sstate-full-${{ inputs.lock-hash }}.tar" -C "$SSTATE" --exclude='*.siginfo' .
           du -h "$RUNNER_TEMP"/full-out/*.tar
 
       - name: Upload the whole shared state
-        if: inputs.final && success() && github.event_name != 'pull_request'
+        if: >-
+          inputs.final && success() &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/upload-artifact@v7
         with:
           name: sstate-full-${{ inputs.lock-hash }}
           path: ${{ runner.temp }}/full-out
           compression-level: 0
-          retention-days: 14
+          retention-days: 7
           overwrite: true
 
       - name: Build statistics

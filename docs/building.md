@@ -71,17 +71,18 @@ needs the Rust toolchain, and a build from scratch takes an hour on 24 threads. 
 |---|---|---|
 | `ci` | every push and pull request | REUSE, device trees (`dtc`), shellcheck, oelint-adv, lorawan-agent tests and clippy, crate lists against `Cargo.lock`, `kas dump`, `bitbake --dry-run` of the image and the bundle |
 | `build` | changes to `meta-bobcat/`, `kas/`, the distro config or libloragw; weekly | `kas/ci-board.yml`: cross toolchain, kernel with our device tree, U-Boot with TF-A, and our small recipes up to package QA |
-| `full-build` | weekly; on demand; on the lock update pull request; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, Node.js and the rest of the packages side by side; ChirpStack; image) that hand their shared state on as artifacts; the image, its bmap and manifest and the bundle as artifact `images` |
+| `full-build` | nightly when main changed; on demand; on the lock update pull request; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, Node.js and the rest of the packages side by side; ChirpStack; image) that hand their shared state on as artifacts; the image, its bmap and manifest and the bundle as artifact `images` |
 
 `build` keeps its shared state in the GitHub Actions cache, keyed on the lock file: a run with an unchanged lock
 reuses the toolchain and builds only what changed; a lock change starts over (90 min on the first run: 2580 tasks,
 sstate 1.3 GB). Pull requests read the cache but never write it. `full-build` keeps all of its shared state as
-artifact `sstate-full-<lock hash>` for 14 days (artifacts are not tied to a branch, and not to the 10 GB cache limit);
-a later run with the same lock file starts from it, or from `build`'s cache when there is none. A run from scratch
-takes about 10 runner hours, a run with an unchanged lock only rebuilds what changed. The weekly `updates` workflow
-starts it on the lock pull request, so a new lock is merged once the image builds, and main's next run starts from
-that shared state. It is taken only from scheduled and manual runs, never from pull request runs, which can come from
-forks. A stage that runs out of time keeps what it built, and "Re-run failed jobs" continues from there. The `images`
-artifact is for a board test: its bundle is signed with the run's throwaway keys. The image, the update bundle and the
-QEMU tests (docs/testing.md) are built on a maintainer's build host before a release.
+artifact `sstate-full-<lock hash>` for 7 days (artifacts are not tied to a branch, and not to the 10 GB cache limit);
+a later run with the same lock file starts from it, or from the stage artifacts of the newest earlier run, or from
+`build`'s cache. A run from scratch takes about 10 runner hours, a run with an unchanged lock only rebuilds what
+changed. The weekly `updates` workflow starts it on the lock pull request, so a new lock is merged once the image
+builds, and main's next run starts from that shared state. Shared state is only taken from and kept by runs in this
+repository, never by a pull request from a fork. A stage that runs out of time keeps what it built, and "Re-run failed
+jobs" continues from there. The `images` artifact is for a board test: its bundle is signed with the run's throwaway
+keys. The image, the update bundle and the QEMU tests (docs/testing.md) are built on a maintainer's build host before
+a release.
 
