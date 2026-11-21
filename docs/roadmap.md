@@ -21,8 +21,9 @@ Steps:
 2. LoRa Basics Station (TLS, API key) for TTN instead of UDP: needs a Basics Station client for Concentratord's
    ZeroMQ API (none exists; Semtech's `station` drives the radio itself, which Concentratord already owns): the
    protocol's timing (`xtime`, RX1/RX2 choice) is the hard part.
-3. Helium: the Helium gateway (`gateway-rs`) takes Semtech UDP locally and signs with a key in the ATECC608 (slot 0
-   holds the Helium key; using it is read-only, see item 4). Only if the Helium network is still worth it.
+3. Helium as a data-only hotspot with its own key in a file (docs/helium.md): the Helium gateway (`gateway-rs`)
+   takes Semtech UDP locally; chosen on the panel. Not the factory key in the ATECC608: that hotspot belongs to the
+   wallet that onboarded it. Written 2026-11-21, not built or tried on a board yet.
 
 Open: a white LED flash per forwarded frame (with item 7); a per-network JoinEUI/DevAddr filter, if anyone needs one.
 

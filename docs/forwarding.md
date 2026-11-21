@@ -30,6 +30,9 @@ SX1302 ── Concentratord ─ZeroMQ──┤
 
 To turn it off, untick everything and Save.
 
+**Helium** is on the same list ("Helium (data-only hotspot, onboard it first)"): it sends the frames to a local
+Helium gateway, which the panel starts with it. It needs onboarding with your own wallet first: docs/helium.md.
+
 ## What it does
 
 - [ChirpStack UDP Forwarder](https://github.com/chirpstack/chirpstack-udp-forwarder) 4.3.1 subscribes to
