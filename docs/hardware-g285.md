@@ -42,7 +42,7 @@ the notes above, and the device tree was written from scratch.
 | Debug console UART2 (`0xfe660000`), pins GPIO0_D1 TX / GPIO0_D0 RX, **1500000 8N1**, 3.3 V | V | [DD] §3 |
 | Console header: internal "DEBUG" pads, pin order not documented | ? | [DD] §3 |
 | Rear micro-USB = OTG / Maskrom / Loader port | V | [DD] §3, [FACT] |
-| Gadget mode on that port fails under mainline (`dwc3: failed to enable ep0out`) | ? | [FACT] |
+| Gadget mode on that port: failed under mainline at first (`dwc3: failed to enable ep0out`, 2026-11-17); works since (checked on the board 2026-11-21) | V | [FACT] |
 
 ## Power
 
@@ -50,7 +50,7 @@ the notes above, and the device tree was written from scratch.
 |---|---|---|
 | 12 V DC input | V | label |
 | PMIC RK809 at i2c0 0x20 (IRQ GPIO0_A3), CPU regulator TCS4525 at i2c0 0x1c | V | [DD] §10, [NEBRA] |
-| RK809 regulator names and voltages as the RK3566 reference design | U | [NEBRA], [ROCK3C] |
+| RK809 regulator names and voltages as the RK3566 reference design: same names, fixed rails (0.9/1.8/3.3 V) and 900 mV start for the bucks as the factory DTB; mainline probes them without errors and turns off the unused NPU and camera rails, which the factory kernel keeps always on | V | [FACT] (factory DTB, board's `regulator_summary`, 2026-11-21) |
 | IO domains: pmuio2 = vcca_1v8, vccio1 = vccio_acodec (3.3 V), vccio3 = vccio_sd, vccio4..7 = vcc_3v3 (pmuio1, vccio2 not set) | V | [FACT] (factory DTB; [DD]'s list, vccio4 = 1.8 V and pmuio2 = 3.3 V, is the Rockchip EVB's) |
 
 ## LoRa concentrator
@@ -80,7 +80,7 @@ the notes above, and the device tree was written from scratch.
 | GMAC1 pin group m0 (GPIO3_B1..B7, C0, C4, C5) | V | [NEBRA], [FACT] (factory DTB) |
 | MAC address: stable, U-Boot derives it from the SoC's serial number (`local-mac-address`) | V | [FACT] |
 | Autonegotiation may wedge after a warm reboot; a PHY soft reset or power cycle clears it | V (symptom), ? (cause) | [DD] §5 |
-| With the patched driver the link came back after a warm `reboot` (once so far) | V | [FACT] |
+| With the patched driver the link comes back after a warm `reboot` (repeated reboots, 2026-11-21) | V | [FACT] |
 
 ## Wi-Fi / Bluetooth
 
