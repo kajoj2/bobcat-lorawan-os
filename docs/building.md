@@ -71,11 +71,13 @@ needs the Rust toolchain, and a build from scratch takes an hour on 24 threads. 
 |---|---|---|
 | `ci` | every push and pull request | REUSE, device trees (`dtc`), shellcheck, oelint-adv, lorawan-agent tests and clippy, crate lists against `Cargo.lock`, `kas dump`, `bitbake --dry-run` of the image and the bundle |
 | `build` | changes to `meta-bobcat/`, `kas/`, the distro config or libloragw; weekly | `kas/ci-board.yml`: cross toolchain, kernel with our device tree, U-Boot with TF-A, and our small recipes up to package QA |
-| `full-build` | weekly; on demand; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, and Node.js, side by side; ChirpStack; image) that hand their shared state on as artifacts |
+| `full-build` | weekly; on demand; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, Node.js and the rest of the packages side by side; ChirpStack; image) that hand their shared state on as artifacts |
 
 `build` keeps its shared state in the GitHub Actions cache, keyed on the lock file: a run with an unchanged lock
 reuses the toolchain and builds only what changed; a lock change starts over (90 min on the first run: 2580
-tasks, sstate 1.3 GB). Pull requests read the cache but never write it. `full-build` starts from that cache; a stage
-that runs out of time keeps what it built, and "Re-run failed jobs" continues from there. The image, the update bundle and the QEMU tests (docs/testing.md) are built on a
+tasks, sstate 1.3 GB). Pull requests read the cache but never write it. `full-build` saves all of its shared state as
+one cache entry too (only the newest is kept) and starts from it, or from `build`'s cache when there is none for the
+lock file: a run from scratch takes about 10 runner hours, a run with an unchanged lock only rebuilds what changed. A
+stage that runs out of time keeps what it built, and "Re-run failed jobs" continues from there. The image, the update bundle and the QEMU tests (docs/testing.md) are built on a
 maintainer's build host before a release.
 
