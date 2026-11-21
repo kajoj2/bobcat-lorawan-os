@@ -4,7 +4,8 @@
 #
 # - lock: moves kas/bobcat-g285.lock.yml to the heads of the layers' branches (meta-rockchip held back, see the kas
 #   file) and opens or updates the pull request on branch update/lock, with the new commits of each layer. Pull
-#   requests made with the workflow token do not start other workflows, so this job starts ci and build on it.
+#   requests made with the workflow token do not start other workflows, so this job starts ci, build and full-build
+#   on it: the new lock is merged once the image builds.
 # - releases: lists recipes whose upstream has a newer release in one issue, rewritten every week and closed when
 #   nothing is outdated. Updating such a recipe is a manual step (docs/building.md).
 #
@@ -47,13 +48,14 @@ jobs:
           title: "Lock: move layers to their branch heads"
           body-path: ${{ runner.temp }}/lock.md
 
-      - name: Start ci and build on the pull request
+      - name: Start ci, build and full-build on the pull request
         if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation == 'updated'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run ci.yml --ref update/lock
           gh workflow run build.yml --ref update/lock || echo "no build workflow on this branch"
+          gh workflow run full-build.yml --ref update/lock || echo "no full-build workflow on this branch"
 
   releases:
     runs-on: ubuntu-24.04
