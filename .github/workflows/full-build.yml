@@ -20,6 +20,12 @@ on:
   workflow_dispatch:
   pull_request:
     types: [labeled]
+  # release.yml: the image with the project's update CA (variable RAUC_CA_CERT)
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -69,7 +75,7 @@ jobs:
           trusted() {
             [ "$1" != "$GITHUB_RUN_ID" ] &&
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$1" --jq '.path + " " + .head_repository.full_name' |
-              grep -qxF ".github/workflows/full-build.yml $GITHUB_REPOSITORY"
+              grep -qxE "\.github/workflows/(full-build|release)\.yml $GITHUB_REPOSITORY"
           }
           api="repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100"
           newest='sort_by(.created_at) | reverse | .[] | select(.expired | not)'
@@ -163,3 +169,4 @@ jobs:
       sstate-pattern: ${{ needs.prepare.outputs.sstate-pattern }}
       targets: lorawan-gateway-image lorawan-gateway-bundle
       final: true
+      ca-cert: ${{ inputs.release && vars.RAUC_CA_CERT || '' }}
