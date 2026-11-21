@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+- Fix: the first-boot registration of the gateway in the local ChirpStack (`lorawan-agent-register.service`) could not
+  write ChirpStack's SQLite database under `ProtectSystem=strict` and retried forever; it now has
+  `ReadWritePaths=/var/lib/chirpstack`. Checked on a board with a real node: join, uplinks, a downlink.
+
 - System updates (A/B with RAUC): U-Boot chooses between `system_a` and `system_b` with a boot counter and falls back
   to the old slot; `lorawan-gateway-bundle` builds a signed update; the panel's "System update" card uploads and
   installs it (ChirpStack login). Keys per builder (`tools/rauc-keys.sh`). docs/updates.md.
