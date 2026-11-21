@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: MIT
 # The whole image and update bundle, built in stages that each fit a hosted runner's 6 h job limit. Each stage hands
-# the shared state it added to the next one as an artifact (stage.yml). Weekly, on demand, and on a pull request
-# when a maintainer adds the label full-build (a run from scratch takes about 10 runner hours, so not on every pull
-# request). Stages that do not depend on each other run side by side, each on its own 4 vCPU runner. A stage that
-# runs out of time keeps what it built: "Re-run failed jobs" continues from there.
-# A board test still happens on a maintainer's build host.
+# the shared state it added on to the later ones as an artifact (stage.yml); stages that do not depend on each other
+# run side by side, each on its own 4 vCPU runner. A stage that runs out of time keeps what it built: "Re-run failed
+# jobs" continues from there. A board test still happens on a maintainer's build host.
+#
+# Runs weekly, on demand, on the lock update pull request (the updates workflow starts it there, so a new lock is
+# merged once it builds), and on a pull request when a maintainer adds the label full-build. A run from scratch takes
+# about 10 runner hours. The last stage keeps all of the shared state as artifact sstate-full-<lock hash> for 14 days;
+# a later run with the same lock file starts from it and builds only what changed. Artifacts are not tied to a
+# branch, so the lock pull request's build also serves main once merged.
 name: full-build
 
 on:
@@ -16,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: full-build-${{ github.ref }}-${{ github.event.label.name || 'run' }}
@@ -28,10 +33,34 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       lock: ${{ steps.lock.outputs.hash }}
+      sstate-run: ${{ steps.sstate.outputs.run }}
     steps:
       - uses: actions/checkout@v5
       - id: lock
         run: echo "hash=${{ hashFiles('kas/bobcat-g285.lock.yml') }}" >> "$GITHUB_OUTPUT"
+
+      # The newest sstate-full artifact for this lock file, only from scheduled and manual runs of this workflow in
+      # this repository: pull request runs can come from forks, and their shared state must not reach other builds.
+      - id: sstate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK: ${{ steps.lock.outputs.hash }}
+        run: |
+          run=""
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=sstate-full-$LOCK&per_page=50" \
+              --jq '.artifacts | sort_by(.created_at) | reverse | .[] | select(.expired | not) | .workflow_run.id'); do
+            origin=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" \
+              --jq '.event + " " + .path + " " + .head_repository.full_name')
+            case "$origin" in
+              "schedule .github/workflows/full-build.yml $GITHUB_REPOSITORY" | \
+              "workflow_dispatch .github/workflows/full-build.yml $GITHUB_REPOSITORY")
+                run=$id
+                break
+                ;;
+            esac
+          done
+          echo "Shared state from: ${run:+run $run}${run:-the build workflow's cache}"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
 
   # Cross toolchain, kernel, U-Boot: the same targets as the build workflow.
   toolchain:
@@ -43,6 +72,7 @@ jobs:
         virtual/kernel virtual/bootloader libloragw-sx1302:do_package_qa bobcat-emmc:do_package_qa
         bobcat-rauc:do_package_qa bobcat-wifibt-firmware:do_package_qa
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
 
   # The Rust toolchain (LLVM, rust, cargo, the target's std) through the smallest Rust recipe, and clang (bindgen in
   # chirpstack and concentratord), which needs LLVM too. do_package, not do_package_qa: QA follows RDEPENDS, and
@@ -53,6 +83,7 @@ jobs:
     with:
       name: 2-rust
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
       targets: lorawan-agent:do_package clang-native
 
   # Node.js for chirpstack's web UI: about 2 h of compiling on its own, over 4.5 h next to LLVM and clang.
@@ -62,6 +93,7 @@ jobs:
     with:
       name: 2-nodejs
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
       targets: nodejs-native
 
   # The rest of the image's packages: nothing here needs Rust or Node.js. lorawan-gateway-config is left out, as it
@@ -72,6 +104,7 @@ jobs:
     with:
       name: 2-userland
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
       targets: >-
         packagegroup-core-boot packagegroup-core-ssh-openssh mosquitto redis avahi libgpiod i2c-tools ethtool htop
         nano zstd
@@ -83,6 +116,7 @@ jobs:
     with:
       name: 3-chirpstack
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
       targets: >-
         chirpstack-concentratord:do_package_qa chirpstack-mqtt-forwarder:do_package_qa
         chirpstack-udp-forwarder:do_package_qa chirpstack:do_package_qa
@@ -94,63 +128,6 @@ jobs:
     with:
       name: 4-image
       lock-hash: ${{ needs.prepare.outputs.lock }}
+      sstate-run: ${{ needs.prepare.outputs.sstate-run }}
       targets: lorawan-gateway-image lorawan-gateway-bundle
-
-  # All of this run's shared state, on top of the cache it started from, becomes the next run's starting point
-  # (stage.yml restores it). Kept even when a stage failed: what was built is still valid. Pull requests only read
-  # it, like the build workflow's cache. Only the newest one is kept: two would not fit in the repository's 10 GB.
-  save-cache:
-    needs: [prepare, toolchain, rust, nodejs, userland, chirpstack, image]
-    if: >-
-      !cancelled() && needs.prepare.result == 'success' && github.event_name != 'pull_request'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      actions: write
-    env:
-      SSTATE: ${{ github.workspace }}/sstate-cache
-      KEY: sstate-full-${{ needs.prepare.outputs.lock }}-${{ github.run_id }}-${{ github.run_attempt }}
-    steps:
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
-          df -h /
-
-      - name: Restore the shared state cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ env.SSTATE }}
-          key: sstate-full-${{ needs.prepare.outputs.lock }}-
-          restore-keys: |
-            sstate-full-${{ needs.prepare.outputs.lock }}-
-            sstate-board-${{ needs.prepare.outputs.lock }}-
-
-      - name: Shared state of all stages
-        uses: actions/download-artifact@v8
-        with:
-          pattern: sstate-*
-          path: ${{ runner.temp }}/stages
-          merge-multiple: true
-
-      - name: Unpack
-        run: |
-          for t in "$RUNNER_TEMP"/stages/*.tar; do
-            [ -e "$t" ] || continue
-            tar -xf "$t" -C "$SSTATE"
-            rm "$t"
-          done
-          du -sh "$SSTATE"
-
-      - name: Save the shared state cache
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ env.SSTATE }}
-          key: ${{ env.KEY }}
-
-      - name: Delete older full build caches
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh cache list -R "$GITHUB_REPOSITORY" --key sstate-full- --limit 100 --json id,key \
-            --jq ".[] | select(.key != \"$KEY\") | .id" |
-            xargs -r -n 1 gh cache delete -R "$GITHUB_REPOSITORY"
+      final: true

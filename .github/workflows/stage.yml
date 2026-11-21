@@ -26,9 +26,18 @@ on:
         description: hashFiles of the lock file, which keys the shared state and downloads caches
         type: string
         required: true
+      sstate-run:
+        description: Run whose artifact sstate-full-<lock-hash> to start from, or empty for the build workflow's cache
+        type: string
+        default: ""
+      final:
+        description: The last stage, which uploads the images and the whole shared state for later runs
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -61,17 +70,24 @@ jobs:
       - name: Throwaway update keys
         run: tools/rauc-keys.sh "$KAS_WORK_DIR/rauc-keys" "CI throwaway"
 
-      # The last full build's shared state (saved by full-build.yml), or else the build workflow's: with an unchanged
-      # lock file, a stage then builds only what changed since. Files restored here are older than the stage's start,
-      # so they are not uploaded again.
-      - name: Restore the shared state cache
+      # The whole shared state of an earlier full build with the same lock file (full-build.yml's prepare job finds
+      # it), so that only what changed since is built; or else the build workflow's cache.
+      - name: Shared state of an earlier full build
+        if: inputs.sstate-run != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: sstate-full-${{ inputs.lock-hash }}
+          run-id: ${{ inputs.sstate-run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/full
+
+      - name: Restore the build workflow's cache
+        if: inputs.sstate-run == ''
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.SSTATE }}
-          key: sstate-full-${{ inputs.lock-hash }}-
-          restore-keys: |
-            sstate-full-${{ inputs.lock-hash }}-
-            sstate-board-${{ inputs.lock-hash }}-
+          key: sstate-board-${{ inputs.lock-hash }}-
+          restore-keys: sstate-board-${{ inputs.lock-hash }}-
 
       - name: Restore the build workflow's downloads cache
         uses: actions/cache/restore@v6
@@ -87,29 +103,33 @@ jobs:
           path: ${{ runner.temp }}/earlier
           merge-multiple: true
 
-      - name: Unpack the earlier stages' shared state
+      # The list of what is there before the build: BitBake touches the shared state files it uses, so their times
+      # cannot tell the new ones apart.
+      - name: Unpack the earlier shared state
         run: |
           mkdir -p "$SSTATE"
-          for t in "$RUNNER_TEMP"/earlier/*.tar; do
+          for t in "$RUNNER_TEMP"/full/*.tar "$RUNNER_TEMP"/earlier/*.tar; do
             [ -e "$t" ] || continue
             echo "$t: $(du -h "$t" | cut -f1)"
             tar -xf "$t" -C "$SSTATE"
             rm "$t"
           done
+          cd "$SSTATE" && find . -type f ! -name '*.siginfo' | sort > "$RUNNER_TEMP/old-files"
+          wc -l < "$RUNNER_TEMP/old-files"
 
       - name: Build
         timeout-minutes: ${{ inputs.build-minutes }}
         run: |
-          mkdir -p "$SSTATE" && touch "$RUNNER_TEMP/stage-start"
           "$RUNNER_TEMP/kas-container" shell kas/ci-board.yml -c "bitbake ${{ inputs.targets }}"
 
       - name: Collect this stage's shared state
         if: success() || failure() || cancelled()
         run: |
           cd "$SSTATE"
-          find . -type f -newer "$RUNNER_TEMP/stage-start" ! -name '*.siginfo' > "$RUNNER_TEMP/new-files"
+          find . -type f ! -name '*.siginfo' | sort | comm -13 "$RUNNER_TEMP/old-files" - > "$RUNNER_TEMP/new-files"
           wc -l < "$RUNNER_TEMP/new-files"
-          xargs -r -a "$RUNNER_TEMP/new-files" du -ch | tail -n 1
+          xargs -r -a "$RUNNER_TEMP/new-files" du -cb |
+            awk '$2 == "total" { n += $1 } END { printf "%.1f GB\n", n / 1e9 }'
           mkdir -p "$RUNNER_TEMP/upload"
           if [ -s "$RUNNER_TEMP/new-files" ]; then
             tar -cf "$RUNNER_TEMP/upload/sstate-${{ inputs.name }}-${{ github.run_attempt }}.tar" \
@@ -128,6 +148,41 @@ jobs:
           compression-level: 0
           retention-days: 3
           if-no-files-found: ignore
+
+      # The image for a board test (the update bundle is signed with this job's throwaway keys: only a board built
+      # with the same keys accepts it).
+      - name: Upload the images
+        if: inputs.final && success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: images
+          path: |
+            ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.xz
+            ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.bmap
+            ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.manifest
+            ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-bundle-bobcat-g285.raucb
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn
+
+      # All shared state the image needed, for the next runs with the same lock file. Not from pull requests: those
+      # can come from forks, and full-build.yml only takes this artifact from scheduled and manual runs anyway.
+      - name: Collect the whole shared state
+        if: inputs.final && success() && github.event_name != 'pull_request'
+        run: |
+          mkdir -p "$RUNNER_TEMP/full-out"
+          tar -cf "$RUNNER_TEMP/full-out/sstate-full-${{ inputs.lock-hash }}.tar" -C "$SSTATE" --exclude='*.siginfo' .
+          du -h "$RUNNER_TEMP"/full-out/*.tar
+
+      - name: Upload the whole shared state
+        if: inputs.final && success() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: sstate-full-${{ inputs.lock-hash }}
+          path: ${{ runner.temp }}/full-out
+          compression-level: 0
+          retention-days: 14
+          overwrite: true
 
       - name: Build statistics
         if: success() || failure() || cancelled()
