@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: MIT
 # The whole image and update bundle, built in stages that each fit a hosted runner's 6 h job limit. Each stage hands
 # the shared state it added to the next one as an artifact (stage.yml). Weekly, on demand, and on a pull request
-# when a maintainer adds the label full-build (a run from scratch takes about 4 to 5 runner hours, so not on every
-# pull request). A stage that runs out of time keeps what it built: "Re-run failed jobs" continues from there.
+# when a maintainer adds the label full-build (a run from scratch takes about 10 runner hours, so not on every pull
+# request). Stages that do not depend on each other run side by side, each on its own 4 vCPU runner. A stage that
+# runs out of time keeps what it built: "Re-run failed jobs" continues from there.
 # A board test still happens on a maintainer's build host.
 name: full-build
 
@@ -44,18 +45,29 @@ jobs:
       cache-restore: sstate-board-${{ needs.prepare.outputs.lock }}-
       lock-hash: ${{ needs.prepare.outputs.lock }}
 
-  # The Rust toolchain (LLVM, rust, cargo), through the smallest Rust recipe.
+  # The Rust toolchain (LLVM, rust, cargo, the target's std) through the smallest Rust recipe, and clang (bindgen in
+  # chirpstack and concentratord), which needs LLVM too. do_package, not do_package_qa: QA follows RDEPENDS, and
+  # lorawan-agent's pulls in chirpstack with everything below.
   rust:
     needs: [prepare, toolchain]
     uses: ./.github/workflows/stage.yml
     with:
       name: 2-rust
       lock-hash: ${{ needs.prepare.outputs.lock }}
-      targets: lorawan-agent:do_package_qa
+      targets: lorawan-agent:do_package clang-native
+
+  # Node.js for chirpstack's web UI: about 2 h of compiling on its own, over 4.5 h next to LLVM and clang.
+  nodejs:
+    needs: [prepare, toolchain]
+    uses: ./.github/workflows/stage.yml
+    with:
+      name: 2-nodejs
+      lock-hash: ${{ needs.prepare.outputs.lock }}
+      targets: nodejs-native
 
   # ChirpStack and its companions. chirpstack's link (LTO) is the heaviest task of the build.
   chirpstack:
-    needs: [prepare, rust]
+    needs: [prepare, rust, nodejs]
     uses: ./.github/workflows/stage.yml
     with:
       name: 3-chirpstack
