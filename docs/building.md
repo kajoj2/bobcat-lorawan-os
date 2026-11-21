@@ -71,7 +71,7 @@ needs the Rust toolchain, and a build from scratch takes an hour on 24 threads. 
 |---|---|---|
 | `ci` | every push and pull request | REUSE, device trees (`dtc`), shellcheck, oelint-adv, lorawan-agent tests and clippy, crate lists against `Cargo.lock`, `kas dump`, `bitbake --dry-run` of the image and the bundle |
 | `build` | changes to `meta-bobcat/`, `kas/`, the distro config or libloragw; weekly | `kas/ci-board.yml`: cross toolchain, kernel with our device tree, U-Boot with TF-A, and our small recipes up to package QA |
-| `full-build` | weekly; on demand; on a pull request labelled `full-build` | the whole image and update bundle, in four chained jobs (toolchain, Rust toolchain, ChirpStack, image) that hand their shared state on as artifacts |
+| `full-build` | weekly; on demand; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, and Node.js, side by side; ChirpStack; image) that hand their shared state on as artifacts |
 
 `build` keeps its shared state in the GitHub Actions cache, keyed on the lock file: a run with an unchanged lock
 reuses the toolchain and builds only what changed; a lock change starts over (90 min on the first run: 2580
