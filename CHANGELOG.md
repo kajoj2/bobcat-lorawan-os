@@ -3,6 +3,11 @@
 
 ## Unreleased
 
+- Home Assistant: the panel's "Home Assistant (MQTT)" card bridges ChirpStack's application events from the gateway's
+  local Mosquitto to another broker (Home Assistant's Mosquitto add-on), with a topic prefix, optional TLS and
+  optional downlinks back; the gateway's own broker stays on localhost (docs/home-assistant.md). Tested on a board
+  with Home Assistant's Mosquitto add-on: a node's uplinks arrive there, a downlink published there reaches ChirpStack.
+
 - Fix: the first-boot registration of the gateway in the local ChirpStack (`lorawan-agent-register.service`) could not
   write ChirpStack's SQLite database under `ProtectSystem=strict` and retried forever; it now has
   `ReadWritePaths=/var/lib/chirpstack`. Checked on a board with a real node: join, uplinks, a downlink.

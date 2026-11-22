@@ -13,9 +13,11 @@ Restart=always
 RestartSec=5
 # Root for port 80 and the LED files in /sys; everything else read-only, except the forwarding server list the
 # panel writes (/var/lib/lorawan-forward, read by chirpstack-udp-forwarder.service) and an uploaded update bundle
-# (/var/lib/lorawan-update, installed by RAUC's own service)
+# (/var/lib/lorawan-update, installed by RAUC's own service), and the Home Assistant bridge Mosquitto includes
+# (/var/lib/lorawan-mqtt-bridge, created by tmpfiles.d with Mosquitto's group)
 ProtectSystem=strict
 StateDirectory=lorawan-forward lorawan-update
+ReadWritePaths=-/var/lib/lorawan-mqtt-bridge
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes

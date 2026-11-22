@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 //! lorawan-agent: the gateway's own status service.
 //!
-//!   lorawan-agent serve      web panel on port 80 (with the forwarding, update and eMMC pages), LED status
+//!   lorawan-agent serve      web panel on port 80 (with the forwarding, Home Assistant, update and eMMC
+//!                            pages), LED status
 //!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
 //!   lorawan-agent led-reset  give the LED back to the device tree's default (green heartbeat)
 
 mod auth;
+mod bridge;
 mod forward;
 mod http;
 mod led;
@@ -76,6 +78,7 @@ fn serve(args: &[String]) -> ExitCode {
     let api = opt(args, "--api", "127.0.0.1:8080");
     let started = now();
     let shared: radio::Shared = Arc::new(Mutex::new(Radio::default()));
+    let bridge_watch = bridge::spawn_watch(broker.clone());
     radio::spawn(shared.clone(), broker);
 
     // LED: re-evaluated every 10 s from cheap checks (one systemctl call, /sys and /proc reads).
@@ -144,6 +147,23 @@ fn serve(args: &[String]) -> ExitCode {
             ),
             // No login for now (owner's choice): the card only warns while ChirpStack has admin/admin.
             (false, "/api/forward") => forward::save(&req.body),
+            (true, "/api/bridge") => Response::new(
+                200,
+                "application/json",
+                bridge::info_json(&bridge_watch, auth.default_password_valid().ok()),
+            ),
+            // The bridge holds the remote broker's password and sends the gateway's data off the box: behind the
+            // ChirpStack login (admin/admin accepted, the card warns).
+            (_, p) if p.starts_with("/api/bridge/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/bridge/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (false, "save") => bridge::save(&req.body),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
             (true, "/api/update") => Response::new(
                 200,
                 "application/json",

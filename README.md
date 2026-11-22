@@ -43,6 +43,8 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
   start: [docs/updates.md](docs/updates.md). Each builder signs with its own keys (`tools/rauc-keys.sh`).
 - Optional, off by default: **UDP Forwarder 4.3.1** shares the gateway with [The Things Network](https://www.thethingsnetwork.org/)
   or another community network next to the local ChirpStack, set on the web panel: [docs/forwarding.md](docs/forwarding.md).
+- Optional, off by default: a bridge from the gateway's MQTT broker to **Home Assistant**'s (or any other) broker,
+  set on the web panel: [docs/home-assistant.md](docs/home-assistant.md).
 - systemd, systemd-networkd (DHCP on Ethernet), OpenSSH (keys only), Avahi (`*.local`).
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 
