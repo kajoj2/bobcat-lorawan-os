@@ -8,7 +8,9 @@ else that speaks MQTT.
 
 > **Status: alpha, running on hardware.** A G285 board runs it as a gateway: the radio receives and sends, a real
 > LoRaWAN node joins the local ChirpStack, frames are forwarded to The Things Network, and the system installs onto
-> the eMMC and updates itself A/B from the web panel. No release yet; build it yourself. Still open: a card install
+> the eMMC and updates itself A/B from the web panel, and a new gateway is set up from a phone. Pre-releases (card
+> image and signed update bundle) are on the [Releases](https://github.com/kajoj2/bobcat-lorawan-os/releases) page;
+> or build it yourself. Still open: a card install
 > reported from an untouched Bobcat (tested with Rockchip's own boot loader standing in for the factory one).
 > What was checked on the board: [docs/bringup-checklist.md](docs/bringup-checklist.md);
 > progress: [CHANGELOG.md](CHANGELOG.md).
@@ -37,22 +39,28 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
                                                            │ SQLite, Redis        └─ MQTT integration → your apps
 ```
 
-- **Linux 6.18** (linux-yocto) with a device tree for the board written for mainline, **U-Boot 2026.01**.
+- **Linux 6.18** (linux-yocto) with a device tree for the board written for mainline, **U-Boot 2026.01**, TF-A (BL31)
+  built from source.
 - **ChirpStack 4.20** (SQLite backend, no PostgreSQL), **Concentratord 4.7.1**, **MQTT Forwarder 4.6.1**.
+- **Web panel** on port 80 (`lorawan-agent`): health, radio statistics per channel and data rate, duty cycle, last
+  frames, the front LED as a health light, and the cards below: [docs/lorawan-agent.md](docs/lorawan-agent.md).
 - **Setup wizard from a phone**: a new gateway opens a setup Wi-Fi network; the wizard sets Wi-Fi, community
-  networks and the eMMC install: [docs/setup.md](docs/setup.md).
+  networks and the eMMC install. The button held 15 s resets the gateway to its fresh state:
+  [docs/setup.md](docs/setup.md).
 - **A/B system updates** with RAUC from the web panel, falling back to the old system if the new one does not
   start: [docs/updates.md](docs/updates.md). Each builder signs with its own keys (`tools/rauc-keys.sh`).
 - Optional, off by default: **UDP Forwarder 4.3.1** shares the gateway with [The Things Network](https://www.thethingsnetwork.org/)
   or another community network next to the local ChirpStack, set on the web panel: [docs/forwarding.md](docs/forwarding.md).
 - Optional, off by default: a bridge from the gateway's MQTT broker to **Home Assistant**'s (or any other) broker,
   set on the web panel: [docs/home-assistant.md](docs/home-assistant.md).
-- systemd, systemd-networkd (DHCP on Ethernet), OpenSSH (keys only), Avahi (`*.local`).
+- systemd, systemd-networkd (DHCP on Ethernet and Wi-Fi), OpenSSH (keys only), Avahi (`*.local`), hardware
+  watchdog.
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 
-The image boots from a **microSD card** and does not touch the eMMC: remove the card and the factory firmware
-boots again. Once it works for you, the web panel can back up the eMMC and install the system onto it (A/B layout,
-the card is no longer needed): [docs/flashing.md](docs/flashing.md).
+The image boots from a **microSD card** and does not touch the eMMC: remove the card and the factory firmware boots
+again. Write the card, insert it, power on, and set the gateway up from a phone ([docs/setup.md](docs/setup.md)).
+Once it works for you, the web panel can back up the eMMC and install the system onto it (A/B layout, the card is no
+longer needed): [docs/flashing.md](docs/flashing.md).
 
 ## Build
 
@@ -91,9 +99,11 @@ tests in it (everything but the radio): [docs/testing.md](docs/testing.md).
 |---|---|
 | `kas/` | Build configuration (`bobcat-g285.yml`, `qemuarm64.yml` for tests in QEMU, `debug-tools.yml` adds bring-up tools) and the pinned revisions of every layer (`*.lock.yml`) |
 | `meta-bobcat/` | Board support: machine, device tree, kernel config |
-| `meta-lorawan/` | Board-independent gateway: distro, ChirpStack stack, image, configuration |
+| `meta-lorawan/` | Board-independent gateway: distro, ChirpStack stack, image, configuration, setup wizard's access point |
+| `lorawan-agent/` | The web panel, setup wizard, LED status and diagnostics (Rust, no crate dependencies) |
 | `docs/` | Hardware notes, architecture, decisions, bring-up checklist |
-| `tools/` | Device tree check, crates.inc generator |
+| `tools/` | Device tree check, crates.inc generator and check, update signing keys (`rauc-keys.sh`), lock updates |
+| `.github/workflows/` | Checks on every pull request, full builds, nightly lock updates, signed releases ([docs/releasing.md](docs/releasing.md)) |
 
 ## Contributing
 
@@ -104,7 +114,7 @@ Issues and pull requests are welcome, in particular from anyone with a G280, G29
 
 MIT for this repository ([LICENSE](LICENSE)); the device tree is `GPL-2.0-or-later OR MIT`, as in the Linux kernel.
 Each file carries an SPDX header. The components the image builds (Linux, U-Boot, ChirpStack, the Semtech HAL,
-Rockchip's DDR init and TF-A binaries from `rkbin`, ...) keep their own licenses; Yocto writes the full list into
+Rockchip's DDR init binary from `rkbin`, ...) keep their own licenses; Yocto writes the full list into
 the build's `tmp/deploy/licenses/`.
 
 Hardware facts come from public community work, credited in [docs/hardware-g285.md](docs/hardware-g285.md).

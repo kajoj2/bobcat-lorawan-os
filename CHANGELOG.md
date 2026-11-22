@@ -8,6 +8,11 @@
   optional downlinks back; the gateway's own broker stays on localhost (docs/home-assistant.md). Tested on a board
   with Home Assistant's Mosquitto add-on: a node's uplinks arrive there, a downlink published there reaches ChirpStack.
 
+- Setup wizard from a phone: a gateway without a network (or with the button held 5 s) opens the open setup network
+  `bobcat-setup-XXXX`; the wizard (`/setup`, a captive portal) sets Wi-Fi with a fall back when the join fails, the
+  community networks and the eMMC install. The button held 15 s is a factory reset. The panel's Wi-Fi SSID and
+  signal come from `iw` now. docs/setup.md.
+
 - Fix: the first-boot registration of the gateway in the local ChirpStack (`lorawan-agent-register.service`) could not
   write ChirpStack's SQLite database under `ProtectSystem=strict` and retried forever; it now has
   `ReadWritePaths=/var/lib/chirpstack`. Checked on a board with a real node: join, uplinks, a downlink.
