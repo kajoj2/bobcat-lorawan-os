@@ -71,7 +71,7 @@ needs the Rust toolchain, and a build from scratch takes an hour on 24 threads. 
 |---|---|---|
 | `ci` | every push and pull request | REUSE, device trees (`dtc`), shellcheck, oelint-adv, lorawan-agent tests and clippy, crate lists against `Cargo.lock`, `kas dump`, `bitbake --dry-run` of the image and the bundle |
 | `build` | changes to `meta-bobcat/`, `kas/`, the distro config or libloragw; weekly | `kas/ci-board.yml`: cross toolchain, kernel with our device tree, U-Boot with TF-A, and our small recipes up to package QA |
-| `full-build` | nightly when main changed; on demand; on the lock update pull request; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, Node.js and the rest of the packages side by side; ChirpStack; image) that hand their shared state on as artifacts; the image, its bmap and manifest and the bundle as artifact `images` |
+| `full-build` | nightly when main changed; on demand; on the lock update pull request; on a pull request labelled `full-build` | the whole image and update bundle, in stages (toolchain; then the Rust toolchain with clang, Node.js and the rest of the packages side by side; ChirpStack; image) that hand their shared state on as artifacts; the image, its bmap and manifest and the bundle as artifact `images` (`images-unsigned` in a release) |
 
 `build` keeps its shared state in the GitHub Actions cache, keyed on the lock file: a run with an unchanged lock
 reuses the toolchain and builds only what changed; a lock change starts over (90 min on the first run: 2580 tasks,
@@ -83,5 +83,6 @@ changed. The weekly `updates` workflow starts it on the lock pull request, so a 
 builds, and main's next run starts from that shared state. Shared state is only taken from and kept by runs in this
 repository, never by a pull request from a fork. A stage that runs out of time keeps what it built, and "Re-run failed
 jobs" continues from there. The `images` artifact is for a board test: its bundle is signed with the run's throwaway
-keys. Releases come from a tag (docs/releasing.md); the QEMU tests (docs/testing.md) run on a maintainer's build host.
+keys, so only a gateway with that run's image takes it. Releases come from a tag (docs/releasing.md); the QEMU
+tests (docs/testing.md) run on a maintainer's build host.
 

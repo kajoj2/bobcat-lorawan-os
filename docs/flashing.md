@@ -9,7 +9,9 @@ No soldering, no USB tools and no changes to the board's eMMC: write the card, i
 
 ## Write the SD card
 
-Use a good microSD card (8 GB or more; an "endurance" or industrial card lasts much longer in a gateway).
+Use a good microSD card (8 GB or more; an "endurance" or industrial card lasts much longer in a gateway). The
+image is `lorawan-gateway-os-<version>-bobcat-g285.wic.xz` from a release, or
+`lorawan-gateway-image-bobcat-g285.rootfs.wic.xz` from your own build.
 
 ```sh
 # Linux (bmaptool is faster and verifies the write)
