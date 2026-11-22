@@ -2,7 +2,9 @@
 
 A tag `v*` starts `.github/workflows/release.yml`:
 
-1. The full build (`full-build.yml`), with the project's update CA built into the image instead of a throwaway one.
+1. The full build (`full-build.yml`), with the project's update CA built into the image instead of a throwaway one,
+   and the version from the tag (`v0.1.0` gives `0.1.0` in `/etc/os-release` and as the bundle's version, which the
+   panel shows for each slot; other builds say `dev` and the build time).
    It starts from the newest full build's shared state, so with an unchanged lock file it takes well under an hour.
 2. The job `publish` waits for a maintainer to approve the `release` environment (the run's page, "Review
    deployments"). Look at the build first: the image in the run's `images-unsigned` artifact can go onto a board

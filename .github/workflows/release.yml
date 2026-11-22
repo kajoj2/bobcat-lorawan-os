@@ -41,6 +41,7 @@ jobs:
     uses: ./.github/workflows/full-build.yml
     with:
       release: true
+      version: ${{ github.ref_name }}
 
   publish:
     needs: build

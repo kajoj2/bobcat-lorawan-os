@@ -26,6 +26,10 @@ on:
       release:
         type: boolean
         default: false
+      version:
+        description: Release version (the tag) for the image and the bundle
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -172,3 +176,4 @@ jobs:
       ca-cert: ${{ inputs.release && vars.RAUC_CA_CERT || '' }}
       # A release's bundle is only signed with the project's key in release.yml: this artifact is not for installing
       images-name: ${{ inputs.release && 'images-unsigned' || 'images' }}
+      version: ${{ inputs.version }}
