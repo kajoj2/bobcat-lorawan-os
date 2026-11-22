@@ -62,7 +62,8 @@ Install (done 2026-11-20, docs/flashing.md, "Install onto the eMMC"):
   raw copy) and an install that writes idbloader, U-Boot and an A/B layout (`system_a`, `system_b`, `data` on
   `/var/lib`) from the running card. U-Boot tries the card first (`boot_targets=mmc1 mmc0`), so a card still wins.
 - A/B updates with RAUC from the panel (docs/updates.md), tested on a board 2026-11-20 (install into the other
-  slot, restart, fall back after three failed starts). Still open: a read-only root file system.
+  slot, restart, fall back after three failed starts). Read-only system partition and the journal on the data partition
+  since 2026-11-22.
 
 Local history:
 - ChirpStack keeps only recent frames. For days/months of sensor values on the gateway itself: decoded uplinks

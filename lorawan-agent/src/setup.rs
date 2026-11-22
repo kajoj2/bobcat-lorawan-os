@@ -31,7 +31,7 @@ const WIFI_UNIT: &str = "lorawan-setup-wifi.service";
 const RUN_DIR: &str = "/run/lorawan-setup";
 /// The agent's state directory (StateDirectory=lorawan-setup); the script reads the request from here.
 const STATE_DIR: &str = "/var/lib/lorawan-setup";
-const WPA_CONF: &str = "/etc/wpa_supplicant/wpa_supplicant-wlan0.conf";
+const WPA_CONF: &str = sys::WIFI_CONFIG;
 /// No network for this long (and the system up at least this long) starts the access point.
 const OFFLINE_START: u64 = 120;
 const BUTTON_HOLD: Duration = Duration::from_secs(5);

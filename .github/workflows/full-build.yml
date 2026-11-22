@@ -177,3 +177,44 @@ jobs:
       # A release's bundle is only signed with the project's key in release.yml: this artifact is not for installing
       images-name: ${{ inputs.release && 'images-unsigned' || 'images' }}
       version: ${{ inputs.version }}
+
+  # Known vulnerabilities in the image's packages: sbom-cve-check (the tool behind oe-core's sbom-cve-check class)
+  # reads the image's SPDX 3 SBOM and compares it with the CVE List and NVD, downloaded fresh. A report, never a
+  # failed build: artifact cve-report (summary, Yocto cve-check JSON), the summary also on the run's page.
+  cve:
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.release && 'images-unsigned' || 'images' }}
+          path: images
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      # Same version as oe-core's python3-sbom-cve-check recipe
+      - name: Install sbom-cve-check
+        run: pip install --quiet sbom-cve-check==1.3.5
+
+      - name: Check the image
+        env:
+          SBOM_CVE_CHECK_DATABASES_DIR: ${{ runner.temp }}/cve-db
+        run: |
+          mkdir -p report
+          sbom-cve-check --sbom-path images/lorawan-gateway-image-bobcat-g285.rootfs.spdx.json \
+            --export-process-native target \
+            --export-type summary --export-path report/lorawan-gateway-image.cve.txt \
+            --export-type yocto-cve-check-manifest --export-path report/lorawan-gateway-image.cve.json
+          cat report/lorawan-gateway-image.cve.txt
+          { echo '## Known vulnerabilities (sbom-cve-check)'; echo '```'; cat report/lorawan-gateway-image.cve.txt;
+            echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cve-report
+          path: report
+          retention-days: 90

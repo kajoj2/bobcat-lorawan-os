@@ -6,8 +6,8 @@ dir=/var/lib/lorawan-secrets
 umask 077
 mkdir -p "$dir"
 if [ ! -s "$dir/chirpstack.env" ]; then
-	# Two random UUIDs from the kernel, as 64 hex characters (244 random bits). The image's busybox has no
-	# base64, head -c or od -A, and this needs no tool at all.
+	# Two random UUIDs from the kernel, as 64 hex characters (244 random bits). Needs nothing beyond
+	# cat and tr, also on a minimal image.
 	secret=$(cat /proc/sys/kernel/random/uuid /proc/sys/kernel/random/uuid | tr -d '\n-')
 	if [ "${#secret}" -ne 64 ]; then
 		echo "lorawan-secrets: could not generate a secret (got ${#secret} characters)" >&2

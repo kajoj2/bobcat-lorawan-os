@@ -50,6 +50,16 @@ Short records; newest last. Each says what was chosen and why, so a later change
    convention, upstreamable). REUSE-compliant headers. Only facts are taken from sources without a license.
 9. **Hardware watchdog through systemd** (`RuntimeWatchdogSec=30s`): an unattended gateway reboots itself when
    the kernel or PID 1 hangs. RK3566's `dw_wdt` is in the kernel config and enabled in the SoC device tree.
+10. **GNU tools instead of busybox** (`packagegroup-lorawan-base-utils`): bash, coreutils, util-linux, procps,
+    findutils, gawk, iproute2, curl. A few MB more, and scripts and people on a shell get the commands and
+    options they expect; busybox's missing `base64` once left ChirpStack's API secret empty.
+11. **Read-only system on the eMMC**: an A/B slot remounts its root read-only early in the boot; settings, data,
+    the Wi-Fi network and the journal live on the data partition. A slot is always what its signed bundle held.
+    The SD card's system stays writable (install and rescue), and keeps its journal in RAM.
+12. **A firewall by default** (nftables, `lorawan-firewall`): only SSH, the panel, ChirpStack's port and mDNS are
+    open; a gateway often ends up on networks its owner does not control. Extra rules on the data partition.
+13. **Compressed swap in RAM** (zram, half the memory, zstd) instead of no swap: ChirpStack, Redis and Mosquitto
+    grow with the number of devices, and 2 GB with no swap meant the OOM killer as the first answer.
 
 ## Open questions
 
@@ -64,8 +74,8 @@ Short records; newest last. Each says what was chosen and why, so a later change
 - Gadget mode on the micro-USB port (`dwc3: failed to enable ep0out`).
 - YT8512B warm-reboot link problem: still there with the PHY reset in the device tree? If yes, kernel fix
   (`PHY_RST_AFTER_CLK_EN`) or a oneshot service.
-- SD card wear: logs are already in RAM (oe-core's volatile `/var/log`) and ext4 mounts with `relatime`. Left:
-  a separate data partition, read-only root with an overlay?
+- SD card wear: answered (2026-11-22). From the card: logs in RAM, `noatime`, weekly `fstrim`. On the eMMC: a data
+  partition and a read-only system (decision 11).
 - Updates: decided 2026-11-20, whole-image A/B with RAUC, installed from the panel behind the ChirpStack login
   (docs/updates.md).
 - ChirpStack web interface build needs the network (pnpm); make it offline (vendored store or Yocto's npm fetcher).

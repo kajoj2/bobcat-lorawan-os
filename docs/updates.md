@@ -38,7 +38,9 @@ U-Boot (`meta-bobcat/recipes-bsp/u-boot/files/bobcat-g285.env`) starts, in this 
 
 On the started system, `rauc-mark-good.service` gives the slot its 3 tries back once the network, SSH and the
 panel are up. A slot that fails three times in a row (a kernel that does not start, a panel that does not come up)
-is passed over, and the other one starts. After an install, RAUC puts the new slot first in `BOOT_ORDER`.
+is passed over, and the other one starts. After an install, RAUC puts the new slot first in `BOOT_ORDER`. A slot whose
+kernel runs but which never becomes good (no network, SSH or panel) restarts by itself 10 minutes after boot
+(`bobcat-boot-check.timer`), so the counter runs out without anyone pulling the plug.
 
 U-Boot keeps these variables in its environment on the eMMC: two copies, at 0x3F0000 and 0x3F8000 (before the
 `uboot` partition at 8 MiB). From Linux, `fw_printenv` and `fw_setenv` (`/etc/fw_env.config`).
@@ -46,18 +48,35 @@ U-Boot keeps these variables in its environment on the eMMC: two copies, at 0x3F
 ## What carries over
 
 Both slots share the `data` partition on `/var/lib` (`var-lib.mount`, active when U-Boot passed `rauc.slot`):
-ChirpStack, Redis and Mosquitto data, the secrets made on the first boot, the community network list, RAUC's own
-status. Files on the system partition are copied from the running slot to the new one after an install
-(`bobcat-rauc-post-install`):
+ChirpStack, Redis and Mosquitto data, the secrets made on the first boot, the Wi-Fi network
+(`/var/lib/lorawan-wifi`), the community network list, the Home Assistant bridge, extra SSH keys
+(`/var/lib/lorawan-ssh/authorized_keys`), extra firewall rules, the journal and RAUC's own status. Files on the
+system partition are copied from the running slot to the new one after an install (`bobcat-rauc-post-install`):
 
 | File | Why |
 |---|---|
 | `/etc/machine-id` | DHCP client ID (same IP addresses), journal |
 | `/etc/ssh/ssh_host_*` | the gateway's SSH identity (no "host key changed" warning) |
-| `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` | the Wi-Fi network |
 | `/root/.ssh/authorized_keys` | merged: the new image's keys plus the ones the gateway has |
 
-Anything else changed by hand on the system partition is gone after an update: put it on `/var/lib`.
+Images before the read-only system kept the Wi-Fi network in `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf`; their
+update handler still copies it, and the new system moves it to `/var/lib/lorawan-wifi` once on its first start
+(`lorawan-wifi-migrate.service`).
+
+## Read-only system partition
+
+A slot runs with its root file system read-only (`bobcat-ro-root.service`, once the early boot steps that write
+there are done): the slot stays exactly what the signed bundle contained, and nothing the gateway does can wear
+it out or leave it half-changed. What changes lives on the data partition or in RAM (`/run`, `/var/volatile`,
+`/tmp`). A change by hand needs `mount -o remount,rw /` first and is gone with the next update: put it on
+`/var/lib` instead. A system started from the SD card stays writable.
+
+## Journal
+
+An A/B gateway keeps the journal on the data partition (`/var/lib/journal`, bound to `/var/log/journal` by
+`bobcat-journal.service`), so the log of a crash or a watchdog restart is still there afterwards:
+`journalctl -b -1`. Limits: 200 MB, at least 1 GB left free, three months (`journald.conf.d/10-lorawan-journald.conf`).
+From the SD card the journal stays in RAM, which spares the card.
 
 ## Building a bundle
 
@@ -112,3 +131,5 @@ G285 on the eMMC, both slots and U-Boot from this repository:
 - `/var/lib` content that a new image ships in its root file system is hidden under the data partition; new
   services create their directories at start (systemd `StateDirectory=`, tmpfiles).
 - The SD card's system (started with the card inserted) does not use the A/B layout and has no update card.
+- Settings changed with `systemctl enable`/`disable`, `timedatectl` or `hostnamectl` need a writable root (see
+  "Read-only system partition"); the panel never needs one.

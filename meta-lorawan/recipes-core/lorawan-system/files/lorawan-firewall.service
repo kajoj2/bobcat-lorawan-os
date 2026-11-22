@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# Packet filter for incoming connections (/usr/share/lorawan-firewall/firewall.nft, SECURITY.md). Loaded
+# before any network comes up. Off: touch /var/lib/lorawan-firewall/disabled.
+[Unit]
+Description=Gateway firewall (nftables)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/SECURITY.md
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target shutdown.target
+After=local-fs.target
+Conflicts=shutdown.target
+ConditionPathExists=!/var/lib/lorawan-firewall/disabled
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/mkdir -p /var/lib/lorawan-firewall
+ExecStart=/usr/sbin/nft -f /usr/share/lorawan-firewall/firewall.nft
+ExecReload=/usr/sbin/nft -f /usr/share/lorawan-firewall/firewall.nft
+ExecStop=/usr/sbin/nft flush ruleset
+
+[Install]
+WantedBy=sysinit.target

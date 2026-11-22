@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# An A/B gateway keeps its journal on the data partition, so the log before a restart (the watchdog's, a crash's)
+# is still there after it; limits in journald.conf.d/10-lorawan-journald.conf. A system started from the SD card
+# keeps it in RAM as before, which spares the card.
+[Unit]
+Description=Journal on the data partition (A/B slot)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/updates.md
+DefaultDependencies=no
+ConditionKernelCommandLine=rauc.slot
+RequiresMountsFor=/var/lib /var/volatile
+After=var-lib.mount
+Before=systemd-journal-flush.service sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# /var/log is a link into /var/volatile (RAM); the journal's directory there becomes the data partition's
+ExecStart=/bin/mkdir -p /var/lib/journal /var/volatile/log/journal
+ExecStart=/bin/mount --bind /var/lib/journal /var/volatile/log/journal
+
+[Install]
+WantedBy=sysinit.target

@@ -145,10 +145,10 @@ without a network opens the setup network `bobcat-setup-XXXX` about two minutes 
 gateway (over Ethernet or the serial console):
 
 ```sh
-mkdir -p /etc/wpa_supplicant
+install -d -m 700 /var/lib/lorawan-wifi
 read -r SSID; read -rs PSK    # type the network name, then the passphrase (not echoed)
-wpa_passphrase "$SSID" "$PSK" | sed '/#psk/d' > /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
-chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf; unset SSID PSK
+wpa_passphrase "$SSID" "$PSK" | sed '/#psk/d' > /var/lib/lorawan-wifi/wpa_supplicant-wlan0.conf
+chmod 600 /var/lib/lorawan-wifi/wpa_supplicant-wlan0.conf; unset SSID PSK
 systemctl restart wpa_supplicant@wlan0
 ```
 

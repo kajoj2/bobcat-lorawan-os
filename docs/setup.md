@@ -73,7 +73,7 @@ The setup network is open: a new gateway has no screen or label to show a passwo
   and gives wlan0 192.168.4.1/24 with systemd-networkd's DHCP server (a network file in `/run`, removed when it
   stops). Stopping it starts `wpa_supplicant@wlan0` again if Wi-Fi is configured.
 - `lorawan-setup-wifi.service`: installs the configuration the agent wrote to `/var/lib/lorawan-setup/` as
-  `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` (SSID in hex, so any name works), joins, and waits up to
+  `/var/lib/lorawan-wifi/wpa_supplicant-wlan0.conf` (SSID in hex, so any name works), joins, and waits up to
   45 seconds for an address. On failure it puts the previous file back (or none) and reopens the setup network.
   The result is in `/var/lib/lorawan-setup/wifi-result`.
 - The Wi-Fi file is the same one an update keeps (docs/updates.md) and the eMMC install copies.

@@ -5,11 +5,12 @@
 # (/var/lib), which both slots share. docs/updates.md.
 set -eu
 
-# Files kept across updates: identity (machine-id: DHCP and journal; SSH host keys) and the Wi-Fi network.
-KEEP="/etc/machine-id /etc/wpa_supplicant/wpa_supplicant-wlan0.conf"
+# Files kept across updates: the gateway's identity (machine-id: DHCP and journal; SSH host keys). The Wi-Fi
+# network is on the data partition (/var/lib/lorawan-wifi) since the root file system became read-only.
+KEEP="/etc/machine-id"
 
-# An environment variable by name (busybox has no printenv)
-env_of() { awk -v n="$1" 'BEGIN { print ENVIRON[n] }'; }
+# An environment variable by name
+env_of() { printenv "$1" || true; }
 
 mnt=$(mktemp -d /run/bobcat-rauc.XXXXXX)
 trap 'umount "$mnt" 2>/dev/null || true; rmdir "$mnt"' EXIT
@@ -28,7 +29,6 @@ for i in ${RAUC_TARGET_SLOTS:-}; do
         mkdir -p "$mnt$(dirname "$f")"
         cp -p "$f" "$mnt$f"
     done
-    [ ! -d "$mnt/etc/wpa_supplicant" ] || chmod 700 "$mnt/etc/wpa_supplicant"
     # SSH keys that may log in: the new image's (its builder's) plus the ones this gateway has now
     if [ -f /root/.ssh/authorized_keys ]; then
         mkdir -p "$mnt/root/.ssh"

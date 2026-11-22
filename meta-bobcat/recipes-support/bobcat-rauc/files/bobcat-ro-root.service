@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+# An A/B slot runs with its root file system read-only (docs/updates.md): the slot stays exactly what the update
+# bundle wrote, and nothing writes to it behind RAUC's back. Everything the gateway changes lives on the data
+# partition (/var/lib) or in RAM. Remounted once the early boot steps that may write there (tmpfiles, ldconfig,
+# the hardware database) are done. For a change by hand: mount -o remount,rw / (gone with the next update).
+[Unit]
+Description=Read-only root file system (A/B slot)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/updates.md
+DefaultDependencies=no
+ConditionKernelCommandLine=rauc.slot
+After=local-fs.target systemd-remount-fs.service systemd-tmpfiles-setup.service ldconfig.service \
+    systemd-hwdb-update.service systemd-journal-catalog-update.service systemd-update-done.service \
+    systemd-machine-id-commit.service systemd-random-seed.service bobcat-journal.service run-postinsts.service \
+    systemd-sysusers.service systemd-firstboot.service
+Before=sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mount -o remount,ro /
+
+[Install]
+WantedBy=sysinit.target

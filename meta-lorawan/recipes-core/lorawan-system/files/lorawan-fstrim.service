@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# TRIM of the mounted file systems that support it (SD card, eMMC): tells the flash which blocks are free.
+[Unit]
+Description=Discard unused blocks on the SD card and eMMC
+Documentation=man:fstrim(8)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/fstrim --listed-in /etc/fstab:/proc/self/mountinfo --verbose --quiet-unsupported
+Nice=19
+IOSchedulingClass=idle

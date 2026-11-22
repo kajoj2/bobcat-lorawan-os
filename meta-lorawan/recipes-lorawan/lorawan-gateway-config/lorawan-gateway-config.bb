@@ -26,6 +26,7 @@ SRC_URI = " \
     file://mosquitto-lorawan.conf \
     file://10-lorawan-mosquitto.conf \
     file://lorawan-mqtt-bridge.tmpfiles \
+    file://lorawan-wifi-migrate.service \
 "
 
 # Set by the machine (board layer): the Concentratord model of the board's concentrator.
@@ -75,6 +76,7 @@ do_install() {
     if ${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'true', 'false', d)}; then
         install -d ${D}${systemd_system_unitdir}/wpa_supplicant@.service.d ${D}${sysconfdir}/systemd/system/multi-user.target.wants
         install -m 0644 ${UNPACKDIR}/10-lorawan-wpa-supplicant.conf ${D}${systemd_system_unitdir}/wpa_supplicant@.service.d/
+        install -m 0644 ${UNPACKDIR}/lorawan-wifi-migrate.service ${D}${systemd_system_unitdir}/
         ln -sf ${systemd_system_unitdir}/wpa_supplicant@.service \
             ${D}${sysconfdir}/systemd/system/multi-user.target.wants/wpa_supplicant@wlan0.service
     fi
@@ -89,7 +91,7 @@ do_install() {
     install -m 0644 ${UNPACKDIR}/10-lorawan-watchdog.conf ${D}${systemd_unitdir}/system.conf.d/
 }
 
-SYSTEMD_SERVICE:${PN} = "lorawan-secrets.service"
+SYSTEMD_SERVICE:${PN} = "lorawan-secrets.service ${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'lorawan-wifi-migrate.service', '', d)}"
 
 FILES:${PN} += "${systemd_system_unitdir} ${systemd_unitdir}/system.conf.d ${nonarch_libdir}/tmpfiles.d"
 CONFFILES:${PN} = " \

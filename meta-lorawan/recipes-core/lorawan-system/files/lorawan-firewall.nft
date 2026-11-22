@@ -1,0 +1,45 @@
+#!/usr/sbin/nft -f
+# SPDX-License-Identifier: MIT
+# The gateway's firewall (lorawan-firewall.service, SECURITY.md): incoming connections only to the services
+# the gateway offers, everything it starts itself (forwarders, the Home Assistant bridge, updates) answered.
+# More rules: files ending in .nft in /var/lib/lorawan-firewall, read inside the input chain, e.g.
+#   tcp dport 9100 accept
+# Off: touch /var/lib/lorawan-firewall/disabled, then systemctl stop lorawan-firewall.
+
+flush ruleset
+
+table inet lorawan {
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif lo accept
+		ct state established,related accept
+		ct state invalid drop
+
+		# Ping, IPv6 neighbour discovery and path MTU
+		meta l4proto { icmp, ipv6-icmp } accept
+
+		# Addresses: DHCP and DHCPv6 replies to the gateway's own requests
+		udp dport { 68, 546 } accept
+
+		# SSH, the panel and setup wizard, ChirpStack's web interface and API
+		tcp dport { 22, 80, 8080 } accept
+
+		# mDNS (<host>.local, avahi)
+		udp dport 5353 accept
+
+		# The setup access point (lorawan-setup): DHCP server and the wizard's captive DNS. Only on Wi-Fi.
+		iifname "wlan*" udp dport { 53, 67 } accept
+		iifname "wlan*" tcp dport 53 accept
+
+		include "/var/lib/lorawan-firewall/*.nft"
+
+		# Refused, not silently dropped: a closed port answers at once
+		meta l4proto tcp reject with tcp reset
+		reject
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+}
