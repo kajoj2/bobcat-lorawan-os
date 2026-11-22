@@ -199,3 +199,28 @@ class LorawanGatewayTest(OERuntimeTestCase):
         self.assertNotEqual(status, 0, msg="the list is still there after turning forwarding off")
         status, output = self.target.run("systemctl is-active chirpstack-udp-forwarder")
         self.assertEqual(output.strip(), "inactive", msg=output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_chirpstack_web"])
+    def test_setup_wizard(self):
+        status, output = self.wait_for("wget -q -O - http://127.0.0.1/setup")
+        self.assertEqual(status, 0, msg=self.journal("lorawan-agent"))
+        self.assertIn("Gateway setup", output)
+        status, output = self.target.run("wget -q -O - http://127.0.0.1/api/setup")
+        self.assertEqual(status, 0, msg=output)
+        # Fresh image: not set up yet, no setup access point (QEMU has no wlan0)
+        self.assertIn('"done":false', output)
+        self.assertIn('"via_ap":false', output)
+        self.assertIn('"active":false', output)
+        # An invalid request is refused before anything is written
+        status, output = self.target.run(
+            "wget -q -O - --post-data 'ssid=&psk=x' http://127.0.0.1/api/setup/wifi 2>&1")
+        self.assertNotEqual(status, 0, msg="an empty network name was accepted: %s" % output)
+        # Finished: remembered, and from the LAN the wizard's changes now need the ChirpStack login
+        status, output = self.target.run("wget -q -O - --post-data '' http://127.0.0.1/api/setup/done")
+        self.assertEqual(status, 0, msg=output)
+        status, output = self.target.run("wget -q -O - http://127.0.0.1/api/setup")
+        self.assertIn('"done":true', output)
+        status, output = self.target.run(
+            "wget -S -q -O - --post-data 'ssid=x&psk=12345678' http://127.0.0.1/api/setup/wifi 2>&1")
+        self.assertIn("401", output)
+        self.target.run("rm -f /var/lib/lorawan-setup/done")

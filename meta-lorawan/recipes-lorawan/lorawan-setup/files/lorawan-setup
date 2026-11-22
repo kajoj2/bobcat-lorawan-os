@@ -1,0 +1,220 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# The setup wizard's privileged steps (docs/setup.md); lorawan-agent starts the units, systemd runs this:
+#   lorawan-setup ap-start   lorawan-setup-ap.service, before hostapd: Wi-Fi scan, hostapd and network files
+#   lorawan-setup ap-up      after hostapd started: wlan0 gets its address once it is an access point
+#   lorawan-setup ap-stop    after hostapd stopped: back to the Wi-Fi client (if one is configured)
+#   lorawan-setup wifi       lorawan-setup-wifi.service: install the configuration the wizard wrote, join the
+#                            network, and go back to the old configuration and the access point if that fails
+#   lorawan-setup factory-reset
+#                            lorawan-setup-reset.service (button held 15 s): the gateway as freshly flashed, then
+#                            a restart
+set -u
+
+IFACE=wlan0
+ADDR=192.168.4.1
+RUN=/run/lorawan-setup
+STATE=/var/lib/lorawan-setup
+NETFILE=/run/systemd/network/10-lorawan-setup.network
+WPA_CONF=/etc/wpa_supplicant/wpa_supplicant-$IFACE.conf
+JOIN_TIMEOUT=45
+
+# busybox has no install(1)
+put() {
+    cp "$1" "$2.new" && chmod 0600 "$2.new" && mv -f "$2.new" "$2"
+}
+
+log() { echo "lorawan-setup: $*" >&2; }
+
+ap_start() {
+    mkdir -p "$RUN" /run/systemd/network
+    # The agent starts the access point by itself only once per boot (for a gateway with a network configured).
+    date -u +%s > "$RUN/started"
+    systemctl stop "wpa_supplicant@$IFACE.service" 2>/dev/null || true
+    ip link set "$IFACE" up 2>/dev/null || true
+    # The networks around, for the wizard's list: hostapd's radio cannot always scan while it is an access point.
+    for _ in 1 2 3; do
+        iw dev "$IFACE" scan > "$RUN/scan.txt.new" 2>/dev/null && break
+        sleep 2
+    done
+    mv -f "$RUN/scan.txt.new" "$RUN/scan.txt"
+
+    # bobcat-setup-1a2b: first part of the host name and the end of the MAC address
+    host=$(cat /proc/sys/kernel/hostname)
+    mac=$(tr -d ':\n' < "/sys/class/net/$IFACE/address")
+    ssid="${host%%-*}-setup-$(printf %s "$mac" | tail -c 4)"
+    printf '%s\n' "$ssid" > "$RUN/ssid"
+
+    # Open on purpose (docs/setup.md): a new gateway has no screen to show a password on. It only runs while the
+    # gateway is being set up, stops after 15 minutes, and the wizard locks itself once finished.
+    cat > "$RUN/hostapd.conf.new" <<EOF
+interface=$IFACE
+driver=nl80211
+ssid=$ssid
+hw_mode=g
+channel=6
+ieee80211n=1
+wmm_enabled=1
+auth_algs=1
+ignore_broadcast_ssid=0
+EOF
+    mv -f "$RUN/hostapd.conf.new" "$RUN/hostapd.conf"
+
+    # Sorts before 80-wireless.network, so it wins for wlan0 while it exists.
+    cat > "$NETFILE" <<EOF
+# Written by lorawan-setup while the setup access point runs; removed when it stops.
+[Match]
+Name=$IFACE
+
+[Network]
+Address=$ADDR/24
+DHCPServer=yes
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+
+[DHCPServer]
+PoolOffset=10
+PoolSize=50
+EmitDNS=yes
+DNS=$ADDR
+EmitRouter=yes
+EOF
+    networkctl reload
+    log "setup access point $ssid on $IFACE, http://$ADDR/setup"
+}
+
+ap_up() {
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        iw dev "$IFACE" info 2>/dev/null | grep -q "type AP" && break
+        sleep 1
+    done
+    networkctl reconfigure "$IFACE"
+}
+
+ap_stop() {
+    rm -f "$NETFILE" "$RUN/hostapd.conf" "$RUN/ssid"
+    networkctl reload
+    if [ -f "$WPA_CONF" ]; then
+        systemctl --no-block start "wpa_supplicant@$IFACE.service"
+    fi
+    networkctl reconfigure "$IFACE" 2>/dev/null || true
+}
+
+result() {
+    printf 'state=%s\nmessage=%s\naddress=%s\n' "$1" "$2" "${3:-}" > "$STATE/wifi-result.new"
+    mv -f "$STATE/wifi-result.new" "$STATE/wifi-result"
+}
+
+ipv4() {
+    ip -4 -o addr show dev "$IFACE" scope global 2>/dev/null | awk '{ sub("/.*", "", $4); print $4; exit }'
+}
+
+wifi() {
+    new=$STATE/wifi.conf.new
+    [ -f "$new" ] || { log "no request in $new"; exit 1; }
+    result joining "" ""
+    # The panel's answer reaches the phone before the setup network goes away.
+    sleep 3
+
+    ap_was_on=""
+    if systemctl -q is-active lorawan-setup-ap.service; then ap_was_on=1; fi
+    mkdir -p "$RUN"
+    rm -f "$RUN/wifi.conf.old"
+    [ ! -f "$WPA_CONF" ] || cp -p "$WPA_CONF" "$RUN/wifi.conf.old"
+    mkdir -p /etc/wpa_supplicant
+    chmod 0700 /etc/wpa_supplicant
+    if ! put "$new" "$WPA_CONF"; then
+        result failed "could not write $WPA_CONF" ""
+        return 0
+    fi
+    rm -f "$new"
+
+    [ -z "$ap_was_on" ] || systemctl stop lorawan-setup-ap.service
+    since=$(date '+%Y-%m-%d %H:%M:%S')
+    systemctl restart "wpa_supplicant@$IFACE.service"
+
+    # wpa_supplicant's own events say why a join fails (its state alone cycles back to SCANNING).
+    events() {
+        journalctl -q -o cat -u "wpa_supplicant@$IFACE.service" --since "$since" 2>/dev/null
+    }
+    state=""; addr=""; i=0
+    while [ $i -lt $JOIN_TIMEOUT ]; do
+        sleep 1; i=$((i + 1))
+        state=$(wpa_cli -i "$IFACE" status 2>/dev/null | sed -n 's/^wpa_state=//p')
+        addr=$(ipv4)
+        if [ "$state" = COMPLETED ] && [ -n "$addr" ]; then
+            log "joined, address $addr"
+            rm -f "$RUN/wifi.conf.old"
+            result ok "" "$addr"
+            return 0
+        fi
+        # Two refused handshakes: no point waiting for more.
+        if [ $((i % 3)) = 0 ] && [ "$(events | grep -c 'reason=WRONG_KEY')" -ge 2 ]; then
+            break
+        fi
+    done
+
+    ev=$(events)
+    if printf '%s' "$ev" | grep -q 'reason=WRONG_KEY'; then
+        why="the network refused the password"
+    elif [ "$state" = COMPLETED ]; then
+        why="joined the network, but got no address from its DHCP server"
+    elif printf '%s' "$ev" | grep -q 'CTRL-EVENT-ASSOC-REJECT\|CTRL-EVENT-AUTH-REJECT'; then
+        why="the network did not accept the gateway (a WPA3-only network, or a MAC address filter?)"
+    elif printf '%s' "$ev" | grep -q 'Associated with'; then
+        why="the connection kept dropping (weak signal?)"
+    else
+        why="network not found (out of range, a typo in the name, or 5 GHz only?)"
+    fi
+    log "could not join: $why (wpa_state ${state:-none})"
+
+    # Back to what worked before, and to the access point if the wizard came from there.
+    if [ -f "$RUN/wifi.conf.old" ]; then
+        put "$RUN/wifi.conf.old" "$WPA_CONF"
+        rm -f "$RUN/wifi.conf.old"
+    else
+        rm -f "$WPA_CONF"
+    fi
+    if [ -n "$ap_was_on" ]; then
+        systemctl stop "wpa_supplicant@$IFACE.service"
+        systemctl start --no-block lorawan-setup-ap.service
+    elif [ -f "$WPA_CONF" ]; then
+        systemctl restart "wpa_supplicant@$IFACE.service"
+    else
+        systemctl stop "wpa_supplicant@$IFACE.service"
+    fi
+    result failed "$why" ""
+    # The wizard reads the result; the unit itself did its job.
+    return 0
+}
+
+# Everything a user set or the gateway learned, gone: Wi-Fi, ChirpStack (devices, users: back to admin/admin),
+# its Redis state, forwarding, the Home Assistant bridge, the setup wizard's state, the registration and the
+# first-boot secrets. Kept: the system itself, SSH host keys and authorized keys, the machine ID (same DHCP
+# address), the Helium key (the hotspot's identity, not a setting). Then a restart, which runs the first boot again.
+factory_reset() {
+    log "factory reset"
+    systemctl stop lorawan-setup-ap.service lorawan-agent.service lorawan-agent-register.service chirpstack.service \
+        chirpstack-udp-forwarder.service "wpa_supplicant@$IFACE.service" 2>/dev/null || true
+    command -v redis-cli >/dev/null && redis-cli flushall >/dev/null 2>&1
+    rm -f "$WPA_CONF"
+    for d in /var/lib/chirpstack /var/lib/lorawan-agent /var/lib/lorawan-forward /var/lib/lorawan-mqtt-bridge \
+        /var/lib/lorawan-setup /var/lib/lorawan-secrets /var/lib/lorawan-update; do
+        # (busybox find has no -delete) the contents, not the directory: tmpfiles/StateDirectory own its mode
+        for f in "$d"/* "$d"/.[!.]*; do
+            [ -e "$f" ] && rm -rf "$f"
+        done
+    done
+    sync
+    log "factory reset done, restarting"
+    systemctl --no-block reboot
+}
+
+case "${1:-}" in
+    ap-start) ap_start ;;
+    ap-up) ap_up ;;
+    ap-stop) ap_stop ;;
+    wifi) wifi ;;
+    factory-reset) factory_reset ;;
+    *) echo "usage: $0 ap-start|ap-up|ap-stop|wifi|factory-reset" >&2; exit 2 ;;
+esac

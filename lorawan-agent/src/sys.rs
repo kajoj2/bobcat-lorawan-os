@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! The system around the radio: services, network, resources. Read from /proc and /sys where possible; the few
-//! tools it runs (systemctl, ip, df, wpa_cli) are in the image anyway.
+//! tools it runs (systemctl, ip, df, iw) are in the image anyway.
 
 use std::fs;
 use std::path::Path;
@@ -122,16 +122,20 @@ fn addresses(iface: &str, family: &str) -> Vec<String> {
         .collect()
 }
 
-fn wifi_link(iface: &str) -> (Option<String>, Option<i32>) {
-    let status = run("wpa_cli", &["-i", iface, "status"]);
-    let ssid = status
-        .lines()
-        .find_map(|l| l.strip_prefix("ssid="))
-        .map(str::to_string);
-    let signal = run("wpa_cli", &["-i", iface, "signal_poll"])
-        .lines()
-        .find_map(|l| l.strip_prefix("RSSI=")?.trim().parse().ok());
+/// SSID and signal of a joined Wi-Fi link, from `iw dev <iface> link` (netlink). wpa_cli cannot answer here:
+/// its reply socket lives in /tmp, which the agent's unit makes private.
+pub fn parse_iw_link(text: &str) -> (Option<String>, Option<i32>) {
+    let field = |name: &str| {
+        text.lines()
+            .find_map(|l| l.trim().strip_prefix(name).map(str::to_string))
+    };
+    let ssid = field("SSID: ");
+    let signal = field("signal: ").and_then(|v| v.split_whitespace().next()?.parse().ok());
     (ssid, signal)
+}
+
+fn wifi_link(iface: &str) -> (Option<String>, Option<i32>) {
+    parse_iw_link(&run("iw", &["dev", iface, "link"]))
 }
 
 pub fn ifaces() -> Vec<Iface> {
@@ -337,6 +341,13 @@ pub fn channel_plan() -> Vec<Channel> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iw_link() {
+        let t = "Connected to 8a:78:48:14:e1:69 (on wlan0)\n\tSSID: My Net\n\tfreq: 2462.0\n\tsignal: -69 dBm\n";
+        assert_eq!(parse_iw_link(t), (Some("My Net".into()), Some(-69)));
+        assert_eq!(parse_iw_link("Not connected.\n"), (None, None));
+    }
 
     #[test]
     fn eu868_plan() {

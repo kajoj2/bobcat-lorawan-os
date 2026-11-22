@@ -13,6 +13,7 @@ check without logging in:
 | Community networks | Card "Community networks" on the panel: forward what the gateway hears to The Things Network (a cluster to tick) or any Semtech UDP server, next to the local ChirpStack; per server whether it answers, uplinks sent, downlinks; a warning while ChirpStack still has admin/admin. No login yet. Off by default. Details: docs/forwarding.md. |
 | Home Assistant | Card "Home Assistant (MQTT)": a Mosquitto bridge that sends ChirpStack's application events (`application/#`, with a topic prefix, `chirpstack/` by default) to another broker such as Home Assistant's Mosquitto add-on, optionally taking downlink commands back; shows whether the bridge is connected. Saving needs a ChirpStack login (admin/admin accepted, with a warning). Details: docs/home-assistant.md. |
 | eMMC page (Bobcat) | "Internal storage (eMMC)" on the panel, where the board's `bobcat-emmc` helper is installed: what is on the eMMC, backups of it as downloads (the essentials of a few hundred MB, or a full raw copy), and installing the running system from the SD card onto it. Downloads and the install need a ChirpStack login (admin/admin accepted, with a warning on the card). Details: docs/flashing.md, "Install onto the eMMC". |
+| Setup wizard | `http://<gateway>/setup`: Wi-Fi from a scan list, community networks, eMMC install, a summary. Starts the setup access point (no network 2 min after boot, or the button held 5 s; held 15 s: factory reset), answers DNS on it so phones show the wizard as a captive portal. Details: docs/setup.md. |
 | ChirpStack registration | On the first boot the gateway adds itself to the local ChirpStack (tenant "ChirpStack", name = host name, stats every 30 s), so it appears under Gateways without typing its EUI. |
 
 ## How it works
@@ -24,7 +25,7 @@ check without logging in:
   `/etc/chirpstack-concentratord/channels.toml`.
 - **Not available from this radio**: noise floor and spectral scan (they need an SX1261, the G285's card has only
   the SX1302 and two SX1250), the concentrator's temperature (no STTS751 on the card) and GPS time.
-- **System**: /proc and /sys, plus `systemctl is-active`, `ip`, `df` and `wpa_cli`; the panel's snapshot is reused
+- **System**: /proc and /sys, plus `systemctl is-active`, `ip`, `df` and `iw`; the panel's snapshot is reused
   for 4 s, the LED is re-evaluated every 10 s from cheaper checks.
 - **Registration** (`lorawan-agent-register.service`, as the `chirpstack` user with ChirpStack's environment): the
   gateway ID from the forwarder's retained connection state; an API key from `chirpstack create-api-key`, kept in

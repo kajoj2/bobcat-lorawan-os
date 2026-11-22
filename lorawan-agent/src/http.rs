@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //! A small HTTP/1.1 server for the panel (`/`), its data (`/api/status`), the text report (`/api/status.txt`) and
-//! the eMMC page's requests (`/api/storage...`), plus the HTTP client side used for ChirpStack's gRPC-web API and by
+//! the eMMC page's requests (`/api/storage...`), the setup wizard (`/setup`), plus the HTTP client side used for ChirpStack's gRPC-web API and by
 //! `lorawan-diag`.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -25,6 +25,8 @@ pub struct Request {
     /// The body of a STREAMED request, not read yet (Content-Length bytes at most).
     pub upload: Option<Mutex<Box<dyn Read + Send>>>,
     pub upload_len: u64,
+    /// The client's address (IPv4 clients of the [::] listener as IPv4-mapped IPv6).
+    pub peer: Option<std::net::IpAddr>,
 }
 
 impl Request {
@@ -75,6 +77,7 @@ fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
         202 => "Accepted",
+        302 => "Found",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
@@ -141,6 +144,7 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
         body: Vec::new(),
         upload: None,
         upload_len: 0,
+        peer: stream.peer_addr().ok().map(|a| a.ip()),
     };
     if let Some(len) = req
         .header("content-length")

@@ -1,0 +1,340 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gateway setup</title>
+<style>
+:root {
+  --bg: #f5f6f4; --card: #ffffff; --text: #1d2420; --muted: #66706a; --line: #e2e5e1;
+  --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --accent: #0f766e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #121614; --card: #1b201d; --text: #e4e9e5; --muted: #8f9a93; --line: #2b322e;
+          --ok: #3fbf72; --warn: #e0a640; --bad: #ef6b5b; --accent: #2dd4bf; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 0 0 10px; }
+.sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+.steps { display: flex; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+.steps li { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.steps li.on { background: var(--accent); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 16px; }
+.note { color: var(--muted); font-size: 14px; }
+.okbox, .warnbox, .badbox { border-left: 3px solid var(--ok); padding: 6px 10px; margin: 10px 0; font-size: 15px; }
+.warnbox { border-color: var(--warn); } .badbox { border-color: var(--bad); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; overflow-wrap: anywhere; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0; }
+dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.nets { list-style: none; margin: 8px 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 300px; overflow-y: auto; }
+.nets li { border-bottom: 1px solid var(--line); }
+.nets li:last-child { border-bottom: 0; }
+.nets label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.nets .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nets .sig { color: var(--muted); font-size: 13px; white-space: nowrap; }
+label.opt { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; }
+input[type=text], input[type=password], textarea { font: inherit; width: 100%; padding: 9px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); color: var(--text); }
+.field { margin: 12px 0; } .field > span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 18px; }
+button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+a { color: var(--accent); font-weight: 600; }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 6px 0 10px; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent);
+  border-radius: 50%; animation: s 1s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes s { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gateway setup</h1>
+  <p class="sub" id="sub">LoRaWAN Gateway OS</p>
+  <ol class="steps" id="steps"></ol>
+  <div class="card" id="card"><p class="note"><span class="spin"></span>Loading…</p></div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const STEPS = ["welcome", "wifi", "networks", "emmc", "done"];
+let S = null, status = null, storageInfo = null, forwardInfo = null, step = "welcome", pollTimer = null;
+
+async function getJson(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  return r.json();
+}
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", body, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+  return { ok: r.ok, status: r.status, text: (await r.text()).trim() };
+}
+const hostLocal = () => `${S.host}.local`;
+const panelUrl = () => S.via_ap ? `http://${hostLocal()}/` : `${location.origin}/`;
+const chirpstackUrl = () => `http://${S.via_ap ? hostLocal() : location.hostname}:8080/`;
+
+function visibleSteps() {
+  return STEPS.filter(s => (s !== "wifi" || S.wifi_present) && (s !== "emmc" || emmcOffered()));
+}
+function emmcOffered() {
+  return storageInfo && storageInfo.available && storageInfo.boot === "sd" && storageInfo.emmc === "present";
+}
+function show(name, html) {
+  step = name;
+  const vis = visibleSteps(), at = vis.indexOf(name === "joining" ? "wifi" : name);
+  $("steps").innerHTML = vis.map((_, i) => `<li class="${i <= at ? "on" : ""}"></li>`).join("");
+  $("card").innerHTML = html;
+  window.scrollTo(0, 0);
+}
+function next(from) {
+  const vis = visibleSteps();
+  go(vis[Math.min(vis.indexOf(from) + 1, vis.length - 1)]);
+}
+function go(name) {
+  clearTimeout(pollTimer);
+  ({ welcome, wifi, networks, emmc, done })[name]();
+}
+
+// --- 1. Welcome --------------------------------------------------------------------------------------------------
+function welcome() {
+  const id = status?.gateway?.id;
+  let h = `<h2>Welcome</h2>` +
+    `<p>This sets up your LoRaWAN gateway in a few steps: ${S.wifi_present ? "the Wi-Fi network it should use, " : ""}` +
+    `where the radio frames go${emmcOffered() ? ", and optionally moving the system from the SD card onto the internal storage" : ""}.</p>` +
+    `<dl><dt>Name</dt><dd>${esc(S.host)}</dd>` +
+    `<dt>Gateway EUI</dt><dd class="mono">${esc(id || "starting…")}</dd>` +
+    `<dt>System</dt><dd>${esc(status?.system?.os || "")}</dd></dl>`;
+  if (S.done) h += `<div class="okbox">This gateway was set up before. Going through the steps again changes only what you change.</div>`;
+  if (S.via_ap) h += `<p class="note">You are on the gateway's setup network <b>${esc(S.ap.ssid)}</b>. It closes by itself after 15 minutes; hold the gateway's button for 5 seconds to open it again.</p>`;
+  h += `<div class="actions">${S.done ? `<a href="/" style="align-self:center;margin-right:auto">Status panel</a>` : ""}<button class="primary" id="go">Start</button></div>`;
+  show("welcome", h);
+  $("go").onclick = () => next("welcome");
+}
+
+// --- 2. Wi-Fi ----------------------------------------------------------------------------------------------------
+let nets = [];
+function bars(dbm) { return dbm >= -55 ? "▂▄▆█" : dbm >= -67 ? "▂▄▆" : dbm >= -78 ? "▂▄" : "▂"; }
+
+function wifi(error) {
+  const w = S.wifi;
+  let h = `<h2>Wi-Fi</h2>`;
+  if (error) h += `<div class="badbox">${esc(error)}</div>`;
+  if (w.connected) h += `<div class="okbox">Connected to <b>${esc(w.connected)}</b>${w.ipv4 ? ` (${esc(w.ipv4)})` : ""}. Choose another network only to change it.</div>`;
+  else if (S.wired) h += `<p class="note">The gateway is on a network cable, so Wi-Fi is optional. Set it up as a fallback, or skip this step.</p>`;
+  h += `<p>Choose the network the gateway should join:</p>` +
+    `<ul class="nets" id="nets"><li><label><span class="spin"></span>Looking for networks…</label></li></ul>` +
+    `<div class="field"><span>Network name</span><input type="text" id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32"></div>` +
+    `<div class="field" id="pskf"><span>Password</span><input type="password" id="psk" autocomplete="off" maxlength="63"></div>` +
+    `<label class="opt note"><input type="checkbox" id="showpsk"> Show password</label>` +
+    `<p class="note">2.4 GHz networks only (the gateway's radio has no 5 GHz). Leave the password empty for an open network.</p>` +
+    `<div class="actions"><button id="rescan">Search again</button>` +
+    (w.connected || S.wired ? `<button id="skip">Skip</button>` : "") +
+    `<button class="primary" id="join">Join</button></div>`;
+  show("wifi", h);
+  $("showpsk").onchange = e => { $("psk").type = e.target.checked ? "text" : "password"; };
+  $("rescan").onclick = scan;
+  if ($("skip")) $("skip").onclick = () => next("wifi");
+  $("join").onclick = join;
+  scan();
+}
+
+async function scan() {
+  const list = $("nets");
+  if (!list) return;
+  list.innerHTML = `<li><label><span class="spin"></span>Looking for networks…</label></li>`;
+  try { nets = (await getJson("api/setup/scan")).networks; } catch (e) { nets = []; }
+  if (!$("nets")) return;
+  list.innerHTML = nets.length ? nets.map((n, i) =>
+    `<li><label><input type="radio" name="net" value="${i}"><span class="name">${esc(n.ssid)}</span>` +
+    `<span class="sig">${n.secure ? "🔒 " : ""}${bars(n.signal)}</span></label></li>`).join("")
+    : `<li><label class="note">No networks found. Type the name below, or search again.</label></li>`;
+  list.querySelectorAll("input[name=net]").forEach(r => r.onchange = () => {
+    const n = nets[r.value];
+    $("ssid").value = n.ssid;
+    $("pskf").hidden = !n.secure;
+    if (!n.secure) $("psk").value = "";
+    else $("psk").focus();
+  });
+}
+
+async function join() {
+  const ssid = $("ssid").value, psk = $("pskf").hidden ? "" : $("psk").value;
+  if (!ssid) { $("ssid").focus(); return; }
+  if (psk && (psk.length < 8 || psk.length > 63)) { wifiError("The password must be 8 to 63 characters."); return; }
+  $("join").disabled = true;
+  let r;
+  try { r = await post("api/setup/wifi", new URLSearchParams({ ssid, psk })); }
+  catch (e) { r = { ok: false, text: e.message }; }
+  if (!r.ok) { wifiError(r.status === 401 ? "Log in with your ChirpStack account to change the Wi-Fi of a gateway that was set up already." : r.text); return; }
+  joining(ssid);
+}
+function wifiError(msg) {
+  const box = document.querySelector("#card .badbox") || Object.assign(document.createElement("div"), { className: "badbox" });
+  box.textContent = msg;
+  $("card").insertBefore(box, $("card").children[1]);
+  if ($("join")) $("join").disabled = false;
+}
+
+function joining(ssid) {
+  const viaAp = S.via_ap;
+  let h = `<h2>Joining ${esc(ssid)}</h2><p><span class="spin"></span>The gateway is connecting. This takes up to a minute.</p>`;
+  if (viaAp) {
+    h += `<div class="warnbox">Your phone loses the setup network <b>${esc(S.ap.ssid)}</b> now.</div>` +
+      `<p><b>If it works:</b> connect your phone to <b>${esc(ssid)}</b> and open<br>` +
+      `<a class="mono" href="http://${esc(hostLocal())}/setup">http://${esc(hostLocal())}/setup</a><br>to finish the setup there. ` +
+      `If that address does not open, find the gateway's address (<b>${esc(S.host)}</b>) in your router's list of devices.</p>` +
+      `<p><b>If it does not work</b> (wrong password, network out of range), the setup network <b>${esc(S.ap.ssid)}</b> comes back within ` +
+      `about a minute. Join it again and this page tells you what went wrong.</p>`;
+  }
+  show("joining", h);
+  const started = Date.now();
+  const poll = async () => {
+    try {
+      S = await getJson("api/setup");
+      const w = S.wifi;
+      if (!w.joining && w.state === "ok") { next("wifi"); return; }
+      if (!w.joining && w.state === "failed") { wifi(`Could not join ${w.requested}: ${w.message}`); return; }
+    } catch (e) { /* the gateway is switching networks */ }
+    if (Date.now() - started < 10 * 60 * 1000) pollTimer = setTimeout(poll, 2000);
+  };
+  pollTimer = setTimeout(poll, 4000);
+}
+
+// --- 3. Networks -------------------------------------------------------------------------------------------------
+async function networks() {
+  show("networks", `<h2>Where the frames go</h2><p class="note"><span class="spin"></span>Loading…</p>`);
+  try { forwardInfo = await getJson("api/forward"); } catch (e) { forwardInfo = { servers: [], presets: [] }; }
+  const on = forwardInfo.servers.map(x => x.server);
+  const custom = on.filter(x => !forwardInfo.presets.some(p => p.server === x));
+  let h = `<h2>Where the frames go</h2>` +
+    `<div class="okbox"><b>Local ChirpStack</b>: always on. Every frame the gateway hears goes to the LoRaWAN network server ` +
+    `on the gateway itself, for your own sensors (<a href="${esc(chirpstackUrl())}" target="_blank" rel="noopener">ChirpStack</a>, ` +
+    `login admin / admin).</div>` +
+    `<p>You can also share the gateway with a community network, so people nearby can use it for their own sensors. ` +
+    `Each network only takes its own devices' frames.</p>` +
+    forwardInfo.presets.map(p => `<label class="opt"><input type="checkbox" name="fwd" value="${esc(p.server)}"${on.includes(p.server) ? " checked" : ""}><span>${esc(p.label)}</span></label>`).join("") +
+    `<details${custom.length ? " open" : ""}><summary class="note">Another server (Semtech UDP)</summary>` +
+    `<div class="field"><span>host:port, one per line</span><textarea id="custom" rows="2" class="mono">${esc(custom.join("\n"))}</textarea></div></details>` +
+    `<p class="note">The Things Network needs the gateway registered once in its console; the last step shows how.</p>` +
+    `<div class="actions"><button class="primary" id="save">Next</button></div>`;
+  show("networks", h);
+  $("save").onclick = async () => {
+    const body = new URLSearchParams();
+    document.querySelectorAll("input[name=fwd]:checked").forEach(x => body.append("server", x.value));
+    $("custom").value.split(/[\s,]+/).filter(Boolean).forEach(x => body.append("server", x));
+    const before = [...on].sort().join(" "), after = body.getAll("server").sort().join(" ");
+    if (before !== after) {
+      $("save").disabled = true;
+      let r;
+      try { r = await post("api/forward", body); } catch (e) { r = { ok: false, text: e.message }; }
+      if (!r.ok) {
+        $("save").disabled = false;
+        const box = Object.assign(document.createElement("div"), { className: "badbox", textContent: r.text });
+        $("save").closest(".actions").before(box);
+        return;
+      }
+      forwardInfo.servers = body.getAll("server").map(server => ({ server }));
+    }
+    next("networks");
+  };
+}
+
+// --- 4. eMMC -----------------------------------------------------------------------------------------------------
+function emmc() {
+  const factory = storageInfo.content === "factory";
+  let h = `<h2>Internal storage</h2>` +
+    `<p>The gateway runs from the SD card now. It can copy itself, with the settings made here, onto its internal eMMC ` +
+    `and run from there: the eMMC lasts far longer than a card that is written to all day, and updates then use two system slots (A/B).</p>` +
+    `<p class="note">Optional: the gateway works from the card as well. You can do this later on the status panel.</p>` +
+    `<div class="badbox">This <b>erases the whole eMMC</b>${factory ? ", the Bobcat factory system included. If you may want it back, skip this step and download the backup on the status panel first (Internal storage → Back up the eMMC)" : ""}.</div>` +
+    `<label class="opt"><input type="checkbox" id="sure"><span>Erase the eMMC and install this system onto it</span></label>` +
+    `<p class="note" id="imsg"></p>` +
+    `<div class="actions"><button id="skip">Skip</button><button class="danger" id="install" disabled>Install</button></div>`;
+  show("emmc", h);
+  $("sure").onchange = e => { $("install").disabled = !e.target.checked; };
+  $("skip").onclick = () => next("emmc");
+  $("install").onclick = async () => {
+    $("install").disabled = true;
+    try {
+      // A new gateway still has ChirpStack's admin / admin: use it. Only a changed password asks (browser dialog).
+      const form = { "Content-Type": "application/x-www-form-urlencoded" };
+      let r = await fetch("api/storage/install", { method: "POST", body: "confirm=ERASE",
+        headers: { ...form, Authorization: "Basic " + btoa("admin:admin") } });
+      if (r.status === 401) {
+        r = await fetch("api/storage/login", { cache: "no-store" });
+        if (r.ok) r = await fetch("api/storage/install", { method: "POST", body: "confirm=ERASE", headers: form });
+      }
+      if (!r.ok) { $("imsg").textContent = (await r.text()).trim(); $("install").disabled = false; return; }
+    } catch (e) { $("imsg").textContent = e.message; $("install").disabled = false; return; }
+    next("emmc");
+  };
+}
+
+// --- 5. Done -----------------------------------------------------------------------------------------------------
+async function done() {
+  post("api/setup/done", "").catch(() => {});
+  const id = status?.gateway?.id || "(see the status panel)";
+  const ttn = (forwardInfo?.servers || []).filter(x => x.server.includes("thethings.network"));
+  let h = `<h2>Done</h2><div class="okbox">The gateway is set up.</div><dl>` +
+    `<dt>Status panel</dt><dd><a href="${esc(panelUrl())}">${esc(panelUrl())}</a></dd>` +
+    `<dt>ChirpStack</dt><dd><a href="${esc(chirpstackUrl())}" target="_blank" rel="noopener">${esc(chirpstackUrl())}</a><br><span class="note">admin / admin: change it there (top right, admin → Change password)</span></dd>` +
+    `<dt>Gateway EUI</dt><dd class="mono">${esc(id)}</dd></dl>`;
+  if (ttn.length) {
+    h += `<p><b>Register the gateway on The Things Network</b> (once): in the <a href="https://console.cloud.thethings.network/" target="_blank" rel="noopener">TTN Console</a> ` +
+      `pick the cluster you chose (${ttn.map(x => esc(x.server.split(".")[0])).join(", ")}), then Gateways → Register gateway, Gateway EUI ` +
+      `<span class="mono">${esc(id)}</span>, the frequency plan for your region (Europe: “Europe 863-870 MHz (SF9 for RX2 - recommended)”). ` +
+      `Frames from an unregistered gateway are dropped.</p>`;
+  }
+  h += `<div id="inst"></div>`;
+  if (S.via_ap) h += `<p class="note">The setup network closes now.</p>`;
+  h += `<div class="actions"><a href="/" style="align-self:center">Open the status panel</a></div>`;
+  show("done", h);
+  if (emmcOffered()) installProgress();
+}
+
+async function installProgress() {
+  try { storageInfo = await getJson("api/storage"); } catch (e) { /* keep the last */ }
+  const i = storageInfo.install || {}, box = $("inst");
+  if (!box) return;
+  if (i.state === "running") {
+    const pct = i.steps ? Math.round(100 * (i.step - 1) / i.steps) : 0;
+    box.innerHTML = `<p><b>Installing onto the eMMC: step ${i.step} of ${i.steps}</b>, ${esc(i.message)}</p><div class="bar"><i style="width:${pct}%"></i></div>` +
+      `<p class="note">A few minutes. Do not power off.</p>`;
+    pollTimer = setTimeout(installProgress, 2000);
+  } else if (i.state === "done") {
+    box.innerHTML = `<div class="warnbox"><b>Installed onto the eMMC.</b> Power off, take the SD card out and power on: the gateway then starts from the eMMC. Keep the card: with it inserted the gateway starts from the card again.</div>`;
+  } else if (i.state === "failed") {
+    box.innerHTML = `<div class="badbox"><b>The install onto the eMMC failed</b>: ${esc(i.message)}. The gateway keeps running from the SD card; see the status panel.</div>`;
+  }
+}
+
+// --- Start -------------------------------------------------------------------------------------------------------
+(async () => {
+  try {
+    [S, status] = await Promise.all([getJson("api/setup"), getJson("api/status").catch(() => null)]);
+    if (S.storage) storageInfo = await getJson("api/storage").catch(() => null);
+  } catch (e) {
+    $("card").innerHTML = `<div class="badbox">The gateway does not answer: ${esc(e.message)}. Reload the page.</div>`;
+    return;
+  }
+  $("sub").textContent = `${S.host}${status?.system?.os ? " · " + status.system.os : ""}`;
+  // Back on the home network after joining it: carry on where the setup network left off.
+  if (!S.done && !S.via_ap && S.wifi.state === "ok") networks();
+  else if (S.wifi.joining) joining(S.wifi.requested);
+  else if (S.wifi.state === "failed" && S.via_ap) wifi(`Could not join ${S.wifi.requested}: ${S.wifi.message}`);
+  else welcome();
+})();
+</script>
+</body>
+</html>

@@ -11,12 +11,14 @@ ExecStart=/usr/bin/lorawan-agent serve
 ExecStopPost=-/usr/bin/lorawan-agent led-reset
 Restart=always
 RestartSec=5
-# Root for port 80 and the LED files in /sys; everything else read-only, except the forwarding server list the
-# panel writes (/var/lib/lorawan-forward, read by chirpstack-udp-forwarder.service) and an uploaded update bundle
-# (/var/lib/lorawan-update, installed by RAUC's own service), and the Home Assistant bridge Mosquitto includes
-# (/var/lib/lorawan-mqtt-bridge, created by tmpfiles.d with Mosquitto's group)
+# Root for port 80, DNS on the setup network (port 53), the button's input device and the LED files in /sys;
+# everything else read-only, except the forwarding server list the panel writes (/var/lib/lorawan-forward, read
+# by chirpstack-udp-forwarder.service), an uploaded update bundle (/var/lib/lorawan-update, installed by RAUC's
+# own service), the setup wizard's Wi-Fi request (/var/lib/lorawan-setup, installed by lorawan-setup-wifi) and
+# the Home Assistant bridge Mosquitto includes (/var/lib/lorawan-mqtt-bridge, created by tmpfiles.d with
+# Mosquitto's group)
 ProtectSystem=strict
-StateDirectory=lorawan-forward lorawan-update
+StateDirectory=lorawan-forward lorawan-update lorawan-setup
 ReadWritePaths=-/var/lib/lorawan-mqtt-bridge
 ProtectHome=yes
 PrivateTmp=yes

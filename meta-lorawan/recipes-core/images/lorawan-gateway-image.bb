@@ -33,6 +33,9 @@ IMAGE_INSTALL += " \
     nano \
     zstd \
 "
+# Setup wizard's access point and Wi-Fi join (docs/setup.md), on boards with Wi-Fi
+IMAGE_INSTALL += "${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'lorawan-setup', '', d)}"
+
 # Bring-up and diagnostic tools, off by default: LORAWAN_DEBUG_TOOLS = "1" (or kas/debug-tools.yml)
 LORAWAN_DEBUG_TOOLS ??= "0"
 IMAGE_INSTALL += "${@oe.utils.conditional('LORAWAN_DEBUG_TOOLS', '1', 'packagegroup-lorawan-debug', '', d)}"
