@@ -122,6 +122,10 @@ pub fn render(c: &Config, client_id: &str) -> String {
         format!(" \"\" {}", c.prefix)
     };
     let _ = writeln!(o, "topic application/# out 0{p}");
+    // The agent's own topics: device alerts and BLE sensors (lorawan/...), and Home Assistant's discovery entries
+    // for them, which must arrive without the prefix
+    let _ = writeln!(o, "topic lorawan/# out 0{p}");
+    o.push_str("topic homeassistant/# out 0\n");
     if c.downlinks {
         let _ = writeln!(o, "topic application/+/device/+/command/down in 0{p}");
     }
@@ -179,7 +183,7 @@ pub fn client_id() -> String {
     )
 }
 
-fn form_fields(body: &[u8]) -> Vec<(String, String)> {
+pub fn form_fields(body: &[u8]) -> Vec<(String, String)> {
     String::from_utf8_lossy(body)
         .split('&')
         .filter_map(|kv| {
@@ -268,6 +272,25 @@ pub fn save(body: &[u8]) -> crate::http::Response {
             format!("systemctl restart {UNIT}: {s}\n"),
         ),
         Err(e) => Response::new(500, "text/plain", format!("systemctl: {e}\n")),
+    }
+}
+
+/// A bridge written by an older agent gets the current topics (the agent's own `lorawan/#` and the discovery
+/// entries): rewritten from its settings, with a Mosquitto restart, when the text differs. Run once at start.
+pub fn refresh() {
+    let Some(c) = configured() else { return };
+    let text = render(&c, &client_id());
+    if fs::read_to_string(FILE).ok().as_deref() == Some(text.as_str()) {
+        return;
+    }
+    match write_config(&text) {
+        Ok(()) => {
+            eprintln!("bridge: updated {FILE} to this version's topics");
+            let _ = Command::new("systemctl")
+                .args(["try-restart", UNIT])
+                .status();
+        }
+        Err(e) => eprintln!("bridge: updating {FILE}: {e}"),
     }
 }
 

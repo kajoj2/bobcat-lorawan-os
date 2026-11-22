@@ -6,22 +6,30 @@
 //!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
+//!   lorawan-agent ble        BLE sensors to MQTT (lorawan-ble.service)
 //!   lorawan-agent led-reset  give the LED back to the device tree's default (green heartbeat)
 
 mod auth;
+mod backup;
+mod ble;
 mod bridge;
+mod devices;
 mod forward;
 mod http;
+mod json;
 mod led;
+mod metrics;
 mod mqtt;
 mod pb;
 mod radio;
 mod register;
+mod release;
 mod setup;
 mod status;
 mod storage;
 mod sys;
 mod update;
+mod wireguard;
 
 use http::{Request, Response};
 use radio::{now, Radio};
@@ -43,6 +51,7 @@ const USAGE: &str = "usage: lorawan-agent <serve|register|diag|led-reset> [optio
   register   [--broker ADDR:PORT] [--api ADDR:PORT] [--chirpstack-config DIR] [--name NAME]
              [--gateway-id EUI]  (another gateway; does not mark this one as registered)
   diag       [--agent ADDR:PORT]                          status report (same as lorawan-diag)
+  ble        [--broker ADDR:PORT]                         BLE sensors to MQTT
   led-reset                                               LED back to green heartbeat
 ";
 
@@ -80,7 +89,10 @@ fn serve(args: &[String]) -> ExitCode {
     let api = opt(args, "--api", "127.0.0.1:8080");
     let started = now();
     let shared: radio::Shared = Arc::new(Mutex::new(Radio::default()));
+    bridge::refresh();
     let bridge_watch = bridge::spawn_watch(broker.clone());
+    let devs = devices::load();
+    devices::spawn(devs.clone(), broker.clone());
     radio::spawn(shared.clone(), broker);
 
     // LED: re-evaluated every 10 s from cheap checks (one systemctl call, /sys and /proc reads).
@@ -124,6 +136,7 @@ fn serve(args: &[String]) -> ExitCode {
     let auth = auth::Auth::new(&api);
     let tracker = forward::Tracker::default();
     let updating: update::Shared = Default::default();
+    let releases: release::Shared = Default::default();
     let route = move |req: &Request| -> Response {
         let status = || {
             let system = {
@@ -169,6 +182,80 @@ fn serve(args: &[String]) -> ExitCode {
                 }
             }
             (true, "/api/status") => Response::new(200, "application/json", status().to_json()),
+            (true, "/metrics") => {
+                let s = status();
+                let d = devs.lock().unwrap();
+                Response::new(
+                    200,
+                    "text/plain; version=0.0.4",
+                    metrics::render(&s.radio, &s.system, &s.health, &d),
+                )
+            }
+            (true, "/metrics/chirpstack") => metrics::chirpstack(),
+            (true, "/api/devices") => {
+                Response::new(200, "application/json", devices::info_json(&devs))
+            }
+            // Settings and the webhook (often with a token in it): behind the ChirpStack login
+            (_, p) if p.starts_with("/api/devices/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/devices/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (false, "save") => devices::save(&devs, &req.body),
+                    (false, "test") => devices::test_webhook(&devs),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
+            (true, "/api/releases") => Response::new(
+                200,
+                "application/json",
+                release::info_json(&releases, false),
+            ),
+            (false, "/api/releases") => {
+                Response::new(200, "application/json", release::info_json(&releases, true))
+            }
+            (true, "/api/backup") => Response::new(
+                200,
+                "application/json",
+                format!("{{\"available\":{}}}", backup::available()),
+            ),
+            // A backup holds every secret of the gateway (Wi-Fi, keys): behind the ChirpStack login
+            (_, p) if p.starts_with("/api/backup/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/backup/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (true, "download") => backup::download(),
+                    (false, "restore") => backup::restore(req),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
+            (true, "/api/wireguard") => {
+                Response::new(200, "application/json", wireguard::info_json())
+            }
+            (_, p) if p.starts_with("/api/wireguard/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/wireguard/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (false, "save") => wireguard::save(&req.body),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
+            (true, "/api/ble") => Response::new(200, "application/json", ble::info_json()),
+            (_, p) if p.starts_with("/api/ble/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/ble/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (false, "save") => ble::save(&req.body),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
             (true, "/api/status.txt") => {
                 Response::new(200, "text/plain; charset=utf-8", status().to_text())
             }
@@ -210,6 +297,7 @@ fn serve(args: &[String]) -> ExitCode {
                 match (get, &p["/api/update/".len()..]) {
                     (true, "login") => Response::new(200, "text/plain", "ok\n"),
                     (false, "upload") => update::upload(req, &updating),
+                    (false, "download") => release::download(&releases, &updating, &req.body),
                     (false, "reboot") => update::reboot(&updating),
                     _ => Response::new(404, "text/plain", "not found\n"),
                 }
@@ -303,6 +391,13 @@ fn main() -> ExitCode {
     match cmd {
         "serve" => serve(rest),
         "diag" => diag(rest),
+        "ble" => match ble::run(&opt(rest, "--broker", DEFAULT_BROKER)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("lorawan-ble: {e}");
+                ExitCode::FAILURE
+            }
+        },
         "register" => {
             let o = register::Options {
                 broker: opt(rest, "--broker", DEFAULT_BROKER),

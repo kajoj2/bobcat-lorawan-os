@@ -16,7 +16,8 @@ use std::thread;
 
 const RAUC: &str = "/usr/bin/rauc";
 /// The upload lands on the data partition (the unit's StateDirectory), not in RAM: bundles are 100+ MB.
-const BUNDLE: &str = "/var/lib/lorawan-update/update.raucb";
+pub const BUNDLE_DIR: &str = "/var/lib/lorawan-update";
+pub const BUNDLE: &str = "/var/lib/lorawan-update/update.raucb";
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum State {
@@ -106,7 +107,7 @@ pub fn info_json(progress: &Shared, default_password: Option<bool>) -> String {
     o
 }
 
-fn set(progress: &Shared, state: State, percent: u32, message: impl Into<String>) {
+pub fn set(progress: &Shared, state: State, percent: u32, message: impl Into<String>) {
     let mut p = progress.lock().unwrap();
     *p = Progress {
         state,
@@ -178,7 +179,7 @@ pub fn upload(req: &Request, progress: &Shared) -> Response {
 
 /// `rauc install` on the uploaded file: RAUC checks the signature and the compatible string, writes the other slot
 /// and makes it the next to boot. Its progress lines feed the panel.
-fn install(progress: &Shared) {
+pub fn install(progress: &Shared) {
     let child = Command::new(RAUC)
         .args(["install", BUNDLE])
         .stdout(Stdio::piped())

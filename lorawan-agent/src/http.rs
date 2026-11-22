@@ -14,7 +14,7 @@ const MAX_CONNECTIONS: usize = 16;
 /// Request line, headers and body together; the panel only ever sends small forms.
 const MAX_REQUEST: u64 = 16384;
 /// Requests whose body is read by the route itself, as a stream (an update bundle of a few hundred MB).
-const STREAMED: [&str; 1] = ["/api/update/upload"];
+const STREAMED: [&str; 2] = ["/api/update/upload", "/api/backup/restore"];
 const MAX_STREAMED: u64 = 1 << 30;
 
 pub struct Request {

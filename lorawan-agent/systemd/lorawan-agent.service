@@ -16,10 +16,11 @@ RestartSec=5
 # by chirpstack-udp-forwarder.service), an uploaded update bundle (/var/lib/lorawan-update, installed by RAUC's
 # own service), the setup wizard's Wi-Fi request (/var/lib/lorawan-setup, installed by lorawan-setup-wifi) and
 # the Home Assistant bridge Mosquitto includes (/var/lib/lorawan-mqtt-bridge, created by tmpfiles.d with
-# Mosquitto's group)
+# Mosquitto's group), the Devices card's list and settings (/var/lib/lorawan-alerts), the WireGuard tunnel and its
+# firewall rule (/var/lib/lorawan-wireguard, /var/lib/lorawan-firewall) and the BLE switch (/var/lib/lorawan-ble)
 ProtectSystem=strict
-StateDirectory=lorawan-forward lorawan-update lorawan-setup
-ReadWritePaths=-/var/lib/lorawan-mqtt-bridge
+StateDirectory=lorawan-forward lorawan-update lorawan-setup lorawan-alerts lorawan-wireguard lorawan-ble
+ReadWritePaths=-/var/lib/lorawan-mqtt-bridge -/var/lib/lorawan-firewall
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes

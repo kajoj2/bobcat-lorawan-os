@@ -14,6 +14,12 @@ check without logging in:
 | Home Assistant | Card "Home Assistant (MQTT)": a Mosquitto bridge that sends ChirpStack's application events (`application/#`, with a topic prefix, `chirpstack/` by default) to another broker such as Home Assistant's Mosquitto add-on, optionally taking downlink commands back; shows whether the bridge is connected. Saving needs a ChirpStack login (admin/admin accepted, with a warning). Details: docs/home-assistant.md. |
 | eMMC page (Bobcat) | "Internal storage (eMMC)" on the panel, where the board's `bobcat-emmc` helper is installed: what is on the eMMC, backups of it as downloads (the essentials of a few hundred MB, or a full raw copy), and installing the running system from the SD card onto it. Downloads and the install need a ChirpStack login (admin/admin accepted, with a warning on the card). Details: docs/flashing.md, "Install onto the eMMC". |
 | Setup wizard | `http://<gateway>/setup`: Wi-Fi from a scan list, community networks, eMMC install, a summary. Starts the setup access point (no network 2 min after boot, or the button held 5 s; held 15 s: factory reset), answers DNS on it so phones show the wizard as a captive portal. Details: docs/setup.md. |
+| Devices | Card "Devices": every device the local ChirpStack hears, its last uplink, its usual interval, RSSI/SNR, and an alert when it goes **silent** (nothing for longer than the threshold, 60 min by default, and three of its usual intervals). Alerts are published retained on `lorawan/alerts/<DevEUI>`, passed to Home Assistant with a "problem" sensor per device, and optionally posted to a webhook (ntfy or any URL taking a plain text POST). Settings need a ChirpStack login. |
+| Updates from GitHub | In the "System update" card: the project's releases with a bundle for this machine, whether one is newer than the running system, and "Install" (downloads the bundle onto the gateway, then installs it like an upload; ChirpStack login). Docs: docs/updates.md. |
+| Backup | Card "Backup": one file with ChirpStack's database and the gateway's settings (Wi-Fi, community networks, Home Assistant, alerts, remote access, SSH keys, firewall rules) to download, and restoring one (then the gateway restarts). ChirpStack login. |
+| Metrics | `http://<gateway>/metrics` for Prometheus: radio counters per frequency, data rate and result, duty cycle, each device's last uplink and signal, service states, system numbers. ChirpStack's own metrics at `/metrics/chirpstack`. No login (read only, like the panel). |
+| Remote access | Card "Remote access (WireGuard)": a tunnel to your own WireGuard server so the gateway is reachable behind NAT (docs/remote-access.md). ChirpStack login. |
+| BLE sensors | Card "BLE sensors": BTHome, Xiaomi (pvvx/ATC firmware, unencrypted MiBeacon) and RuuviTag readings heard over Bluetooth LE, published on `lorawan/ble/<MAC>` with Home Assistant discovery (docs/ble.md). Off by default; switching needs a ChirpStack login. |
 | ChirpStack registration | On the first boot the gateway adds itself to the local ChirpStack (tenant "ChirpStack", name = host name, stats every 30 s), so it appears under Gateways without typing its EUI. |
 
 ## How it works
@@ -24,7 +30,7 @@ check without logging in:
   the hourly history keeps 24 hours in memory (gone after a restart). The channel plan comes from
   `/etc/chirpstack-concentratord/channels.toml`.
 - **Not available from this radio**: noise floor and spectral scan (they need an SX1261, the G285's card has only
-  the SX1302 and two SX1250), the concentrator's temperature (no STTS751 on the card) and GPS time.
+  the SX1302 and two SX1250; checked again 2026-11-22 for a spectrum card on the panel: not possible on this board), the concentrator's temperature (no STTS751 on the card) and GPS time.
 - **System**: /proc and /sys, plus `systemctl is-active`, `ip`, `df` and `iw`; the panel's snapshot is reused
   for 4 s, the LED is re-evaluated every 10 s from cheaper checks.
 - **Registration** (`lorawan-agent-register.service`, as the `chirpstack` user with ChirpStack's environment): the
@@ -60,12 +66,32 @@ check without logging in:
   panel accepts it too (owner's choice): the update, eMMC and community network cards warn while it is the default,
   since anyone on the LAN knows it.
 
+- **Devices** (`devices.rs`): a second MQTT connection subscribes to ChirpStack's `application/+/device/+/event/up`
+  (JSON). The list and the settings are in `/var/lib/lorawan-alerts` (`devices.tsv`, saved every 5 minutes;
+  `settings`). The usual interval is smoothed over the uplinks (bursts closer than 10 s do not count). Checked every
+  minute. `GET /api/devices`, behind a login `POST /api/devices/save` (`threshold_min`, `webhook`, `webhook_clear=on`,
+  or `forget=<DevEUI>`) and `POST /api/devices/test`. The webhook is called with `curl`: a POST with a plain text
+  body and `Title`/`Tags` headers (what ntfy reads).
+- **Updates from GitHub** (`release.rs`): `GET /api/releases` (GitHub's release list through `curl`, cached for 10
+  minutes; `POST /api/releases` checks again, at most once a minute), behind the update login
+  `POST /api/update/download` with `tag=`. Only assets named `*-<machine>.raucb` under
+  `https://github.com/<repo>/releases/download/` are offered. The repository is set at build time
+  (`LORAWAN_RELEASE_REPO`, written to `/usr/share/lorawan-agent/release-repo`); empty turns it off.
+- **Backup** (`backup.rs`, `lorawan-backup`): `lorawan-backup.service` writes the file (`sqlite3 .backup` of
+  ChirpStack's database, the settings directories of `/var/lib`, a manifest) which the panel then sends;
+  `POST /api/backup/restore` takes a file of up to 256 MiB, `lorawan-backup check` looks at every entry (only the
+  known directories, no absolute paths, no `..`), and `lorawan-restore.service` stops the services, puts it in place
+  and restarts the gateway.
+- **Remote access** (`wireguard.rs`): docs/remote-access.md.
+- **BLE sensors** (`ble.rs`): docs/ble.md.
+
 ## Commands
 
 ```
 lorawan-agent serve [--listen [::]:80] [--broker 127.0.0.1:1883] [--api 127.0.0.1:8080]
 lorawan-agent register [--api 127.0.0.1:8080] [--name NAME] [--gateway-id EUI]
 lorawan-diag                      (= lorawan-agent diag [--agent 127.0.0.1:80])
+lorawan-agent ble [--broker 127.0.0.1:1883]   BLE sensors to MQTT (lorawan-ble.service)
 lorawan-agent led-reset           LED back to green heartbeat (run when the service stops)
 ```
 

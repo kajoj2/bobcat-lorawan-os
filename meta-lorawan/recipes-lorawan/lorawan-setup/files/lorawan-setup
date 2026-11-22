@@ -194,11 +194,13 @@ wifi() {
 factory_reset() {
     log "factory reset"
     systemctl stop lorawan-setup-ap.service lorawan-agent.service lorawan-agent-register.service chirpstack.service \
-        chirpstack-udp-forwarder.service "wpa_supplicant@$IFACE.service" 2>/dev/null || true
+        chirpstack-udp-forwarder.service lorawan-wireguard.service lorawan-ble.service "wpa_supplicant@$IFACE.service" \
+        2>/dev/null || true
     command -v redis-cli >/dev/null && redis-cli flushall >/dev/null 2>&1
     rm -f "$WPA_CONF"
     for d in /var/lib/chirpstack /var/lib/lorawan-agent /var/lib/lorawan-forward /var/lib/lorawan-mqtt-bridge \
-        /var/lib/lorawan-setup /var/lib/lorawan-secrets /var/lib/lorawan-update /var/lib/lorawan-firewall; do
+        /var/lib/lorawan-setup /var/lib/lorawan-secrets /var/lib/lorawan-update /var/lib/lorawan-firewall \
+        /var/lib/lorawan-alerts /var/lib/lorawan-wireguard /var/lib/lorawan-ble /var/lib/lorawan-ssh; do
         # The contents, not the directory: tmpfiles/StateDirectory own its mode
         [ ! -d "$d" ] || find "$d" -mindepth 1 -delete
     done

@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+- Panel: updates straight from the project's GitHub releases (list, "newer" marker, download and install); a Backup
+  card (ChirpStack's data and all settings in one file, restore with a restart); a Devices card with each device's
+  last uplink and alerts for silent devices (MQTT, Home Assistant problem sensors, ntfy/webhook); Prometheus metrics
+  at `/metrics` (and ChirpStack's at `/metrics/chirpstack`); remote access over WireGuard (docs/remote-access.md);
+  BLE sensors to MQTT with Home Assistant discovery (BTHome, pvvx/ATC, MiBeacon, Ruuvi; docs/ble.md). ChirpStack's
+  device profile repository is imported on the first boot, so devices can be added by vendor and model.
+
 - System: GNU tools and bash instead of busybox; a firewall (nftables) that only lets in SSH, the panel,
   ChirpStack and mDNS (SECURITY.md); half the RAM as zstd compressed swap (zram); `noatime` and a weekly `fstrim`;
   no `pam` and `ext2` distro features. On the eMMC the system partition is read-only and the journal is kept on the

@@ -23,6 +23,15 @@ On the panel (`http://<gateway>/`), card "System update" (shown when the gateway
    slot. The card shows the progress.
 3. "Restart now". About a minute later the panel shows the new version as "running".
 
+### From GitHub
+
+The same card lists the project's releases that carry a bundle for this gateway (newest first, pre-releases
+marked) and says whether one is newer than the running system. "Install" (ChirpStack login) downloads the bundle
+onto the data partition and installs it as above; the progress bar shows the download, then RAUC's steps. Only
+bundles signed with the key the system trusts are accepted, so a release built by someone else is refused before
+the slot is touched. A build of your own (`DISTRO_VERSION` "dev") counts no release as newer. Builders set the
+repository with `LORAWAN_RELEASE_REPO` (default `kajoj2/bobcat-lorawan-os`; empty turns the list off).
+
 From a shell, the same: `rauc install /path/to/bundle.raucb`, then `reboot`. `rauc status --detailed` shows both
 slots, the installed versions and which one starts next.
 

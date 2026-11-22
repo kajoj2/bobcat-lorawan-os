@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-//! A minimal MQTT 3.1.1 subscriber (QoS 0, clean session) for the local Mosquitto. Enough to follow what the
-//! MQTT Forwarder publishes; it never publishes itself.
+//! A minimal MQTT 3.1.1 client (QoS 0, clean session) for the local Mosquitto: enough to follow what the MQTT
+//! Forwarder and ChirpStack publish, and to publish the agent's own device alerts and BLE sensor readings.
 
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
@@ -90,6 +90,37 @@ impl Client {
         self.send(&packet(0x82, &body))
     }
 
+    /// PUBLISH at QoS 0; `retain` keeps it on the broker for later subscribers.
+    pub fn publish(&mut self, topic: &str, payload: &[u8], retain: bool) -> io::Result<()> {
+        let mut body = Vec::with_capacity(topic.len() + payload.len() + 2);
+        put_str(&mut body, topic);
+        body.extend_from_slice(payload);
+        self.send(&packet(0x30 | u8::from(retain), &body))
+    }
+
+    /// Answers the broker's pings for a client that only publishes.
+    pub fn keep_up(&mut self) -> io::Result<()> {
+        self.keep_alive()?;
+        self.stream.set_nonblocking(true)?;
+        let mut buf = [0u8; 64];
+        let r = self.stream.read(&mut buf);
+        self.stream.set_nonblocking(false)?;
+        match r {
+            Ok(0) => Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "broker closed the connection",
+            )),
+            Ok(n) => {
+                if buf[..n].contains(&0xd0) {
+                    self.ping_sent = None;
+                }
+                Ok(())
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
     fn send(&mut self, p: &[u8]) -> io::Result<()> {
         self.stream.write_all(p)?;
         self.last_sent = Instant::now();
@@ -169,6 +200,48 @@ impl Client {
     }
 }
 
+/// A publishing connection that comes back by itself: each publish reconnects when the last one failed.
+pub struct Publisher {
+    broker: String,
+    client_id: String,
+    client: Option<Client>,
+}
+
+impl Publisher {
+    pub fn new(broker: &str, client_id: &str) -> Publisher {
+        Publisher {
+            broker: broker.to_string(),
+            client_id: client_id.to_string(),
+            client: None,
+        }
+    }
+
+    pub fn publish(&mut self, topic: &str, payload: &[u8], retain: bool) -> io::Result<()> {
+        if self.client.is_none() {
+            self.client = Some(Client::connect(
+                &self.broker,
+                &self.client_id,
+                Duration::from_secs(60),
+            )?);
+        }
+        let c = self.client.as_mut().expect("connected above");
+        let r = c.keep_up().and_then(|_| c.publish(topic, payload, retain));
+        if r.is_err() {
+            self.client = None;
+        }
+        r
+    }
+
+    /// Keeps an idle connection alive (call every few seconds).
+    pub fn idle(&mut self) {
+        if let Some(c) = self.client.as_mut() {
+            if c.keep_up().is_err() {
+                self.client = None;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +283,26 @@ mod tests {
         assert!(
             broker.join().unwrap(),
             "no PINGREQ while messages kept coming"
+        );
+    }
+
+    #[test]
+    fn publish_packet() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let broker = thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 256];
+            let _ = s.read(&mut buf).unwrap(); // CONNECT
+            s.write_all(&[0x20, 0x02, 0x00, 0x00]).unwrap();
+            let n = s.read(&mut buf).unwrap();
+            buf[..n].to_vec()
+        });
+        let mut p = Publisher::new(&addr, "t");
+        p.publish("a/b", b"hi", true).unwrap();
+        assert_eq!(
+            broker.join().unwrap(),
+            vec![0x31, 7, 0, 3, b'a', b'/', b'b', b'h', b'i']
         );
     }
 

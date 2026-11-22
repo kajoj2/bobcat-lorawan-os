@@ -1,0 +1,88 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# The gateway's settings and data in one file, and back (docs/lorawan-agent.md, "Backup"):
+#   lorawan-backup create FILE    ChirpStack's database (a consistent copy) and the gateway's own settings
+#   lorawan-backup check FILE     is FILE a backup this system can restore?
+#   lorawan-backup restore FILE   put a backup in place (services stopped meanwhile); restart afterwards
+# The panel runs create and restore through lorawan-backup.service and lorawan-restore.service.
+set -eu
+
+FORMAT="lorawan-backup 1"
+DB=/var/lib/chirpstack/chirpstack.sqlite
+# Directories of /var/lib that make up the gateway's settings (missing ones are skipped)
+ITEMS="lorawan-secrets lorawan-agent lorawan-forward lorawan-mqtt-bridge lorawan-wifi lorawan-alerts \
+lorawan-firewall lorawan-wireguard lorawan-ssh lorawan-ble"
+STOP="chirpstack.service lorawan-agent-register.service chirpstack-udp-forwarder.service lorawan-wireguard.service"
+
+die() { echo "lorawan-backup: $*" >&2; exit 1; }
+
+create() {
+    out=$1
+    tmp=$(mktemp -d "$(dirname "$out")/.backup.XXXXXX")
+    trap 'rm -rf "$tmp"' EXIT
+    mkdir "$tmp/chirpstack"
+    [ -f "$DB" ] || die "no ChirpStack database at $DB"
+    sqlite3 "$DB" ".backup '$tmp/chirpstack/chirpstack.sqlite'"
+    chown chirpstack:chirpstack "$tmp/chirpstack" "$tmp/chirpstack/chirpstack.sqlite"
+    {
+        echo "format=$FORMAT"
+        echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "host=$(cat /proc/sys/kernel/hostname)"
+        . /etc/os-release && echo "version=${VERSION_ID:-}"
+    } > "$tmp/manifest.txt"
+    items=""
+    for i in $ITEMS; do [ -d "/var/lib/$i" ] && items="$items $i"; done
+    umask 077
+    # shellcheck disable=SC2086
+    tar -czf "$out.part" -C "$tmp" manifest.txt chirpstack -C /var/lib $items
+    mv "$out.part" "$out"
+    echo "lorawan-backup: $(du -h "$out" | cut -f1) written to $out"
+}
+
+# Only our own entries: the manifest, the database, and the directories above; nothing absolute, no "..".
+check() {
+    in=$1
+    tar -xzOf "$in" manifest.txt 2>/dev/null | grep -qxF "format=$FORMAT" || die "not a gateway backup (no manifest)"
+    tar -tzf "$in" | while IFS= read -r p; do
+        case "$p" in
+            /*|*..*) die "unsafe path in the backup: $p" ;;
+            manifest.txt|chirpstack/|chirpstack/chirpstack.sqlite) ;;
+            *)
+                top=${p%%/*}
+                case " $ITEMS " in *" $top "*) ;; *) die "unexpected entry in the backup: $p" ;; esac
+                ;;
+        esac
+    done
+    tar -tzf "$in" | grep -qx 'chirpstack/chirpstack.sqlite' || die "the backup has no ChirpStack database"
+}
+
+restore() {
+    in=$1
+    check "$in"
+    stage=$(mktemp -d /var/lib/.restore.XXXXXX)
+    trap 'rm -rf "$stage"' EXIT
+    tar -xzpf "$in" --same-owner -C "$stage"
+    # shellcheck disable=SC2086
+    systemctl stop $STOP 2>/dev/null || true
+    rm -f "$DB-journal" "$DB-wal" "$DB-shm"
+    mv -f "$stage/chirpstack/chirpstack.sqlite" "$DB"
+    chown chirpstack:chirpstack "$DB"
+    for i in $ITEMS; do
+        [ -d "$stage/$i" ] || continue
+        rm -rf "/var/lib/$i.old"
+        [ ! -d "/var/lib/$i" ] || mv "/var/lib/$i" "/var/lib/$i.old"
+        mv "$stage/$i" "/var/lib/$i"
+        rm -rf "/var/lib/$i.old"
+    done
+    # A backup from another gateway: let this one add itself to ChirpStack too (an existing entry stays)
+    rm -f /var/lib/lorawan-agent/registered
+    sync
+    echo "lorawan-backup: restored from $in ($(tar -xzOf "$in" manifest.txt | tr '\n' ' '))"
+}
+
+case "${1:-}" in
+    create) [ -n "${2:-}" ] || die "usage: lorawan-backup create FILE"; create "$2" ;;
+    check) [ -n "${2:-}" ] || die "usage: lorawan-backup check FILE"; check "$2"; echo ok ;;
+    restore) [ -n "${2:-}" ] || die "usage: lorawan-backup restore FILE"; restore "$2" ;;
+    *) sed -n '3,6s/^# \{0,1\}//p' "$0"; exit 2 ;;
+esac

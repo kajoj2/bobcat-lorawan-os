@@ -49,6 +49,18 @@ The application ID is the UUID in ChirpStack's address bar (Applications → you
 lower case. Payloads are JSON (ChirpStack's `json` marshaler); see ChirpStack's documentation of the MQTT integration
 for every field.
 
+### The gateway's own topics
+
+Besides ChirpStack's events, the bridge passes on what the panel itself publishes, with the same prefix:
+
+| Topic | What |
+|---|---|
+| `<prefix>lorawan/alerts/<DevEUI>` | retained, the Devices card's alert: `{"state":"silent"\|"ok", "dev_eui", "device", "application", "last_seen", "silent_for", "interval"}` |
+| `<prefix>lorawan/ble/<MAC>` | readings of BLE sensors (docs/ble.md) |
+
+and, without the prefix, retained discovery entries under `homeassistant/`: a "Silent" problem sensor for each
+LoRaWAN device, and a sensor for each BLE reading. Home Assistant's MQTT integration picks them up by itself.
+
 ## Sensors in Home Assistant
 
 An example for a device whose codec returns `{"temperature": 21.5, "battery": 3.01}`, in `configuration.yaml`:

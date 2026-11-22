@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+# The WireGuard tunnel set on the panel's "Remote access" card (docs/remote-access.md).
+[Unit]
+Description=WireGuard tunnel for remote access
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/remote-access.md
+ConditionPathExists=/var/lib/lorawan-wireguard/wg0.conf
+Wants=network-online.target
+After=network-online.target lorawan-firewall.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/wg-quick up /var/lib/lorawan-wireguard/wg0.conf
+ExecStop=/usr/bin/wg-quick down /var/lib/lorawan-wireguard/wg0.conf
+# A tunnel whose endpoint could not be resolved yet (no network at boot): try again
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

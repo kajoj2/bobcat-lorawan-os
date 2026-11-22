@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# The panel's "Download a backup": writes the file it then sends (docs/lorawan-agent.md, "Backup").
+[Unit]
+Description=Backup of the gateway's settings and ChirpStack data
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/lorawan-agent.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lorawan-backup create /var/lib/lorawan-update/backup.tar.gz
