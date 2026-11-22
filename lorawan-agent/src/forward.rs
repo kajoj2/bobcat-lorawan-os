@@ -102,7 +102,7 @@ pub fn configured() -> Vec<String> {
     parse(&fs::read_to_string(FILE).unwrap_or_default())
 }
 
-fn percent_decode(s: &str) -> String {
+pub fn percent_decode(s: &str) -> String {
     let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());

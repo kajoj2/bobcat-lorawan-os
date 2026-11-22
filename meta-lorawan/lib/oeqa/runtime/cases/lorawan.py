@@ -118,6 +118,18 @@ class LorawanGatewayTest(OERuntimeTestCase):
                 self.assertIn(addr, loopback, msg="%s listens beyond localhost (%s)" % (ports[port], addr))
         self.assertEqual(seen, set(ports), msg="not listening: %s" % [ports[p] for p in set(ports) - seen])
 
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
+    def test_mqtt_bridge_setup(self):
+        # Mosquitto reads our file with the panel's bridge directory; the directory is Mosquitto's group only.
+        status, output = self.target.run("cat /proc/$(systemctl show -p MainPID --value mosquitto)/cmdline | tr '\\0' ' '")
+        self.assertIn("/etc/mosquitto/lorawan.conf", output)
+        status, output = self.target.run("stat -c '%a %U %G' /var/lib/lorawan-mqtt-bridge")
+        self.assertEqual(output.strip(), "2750 root mosquitto", msg=output)
+        # No bridge until one is set on the panel
+        status, output = self.target.run("wget -qO- http://127.0.0.1/api/bridge")
+        self.assertEqual(status, 0, msg=output)
+        self.assertIn('"configured":false', output)
+
     @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
     def test_sshd_board_policy(self):
         # The board's key-only drop-in is installed; on QEMU lorawan-test-access overrides it (and is QEMU only).

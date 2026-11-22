@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 SUMMARY = "Configuration that turns the services into one LoRaWAN gateway"
 DESCRIPTION = "Concentratord board/region configuration, MQTT and UDP Forwarder and ChirpStack configuration, first-boot \
-secret generation, wired and Wi-Fi networking over DHCP (online when either is), key-only SSH and the hardware watchdog."
+secret generation, the Mosquitto setup for the panel's Home Assistant bridge, wired and Wi-Fi networking over DHCP (online when either is), key-only SSH and the hardware watchdog."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
@@ -23,6 +23,9 @@ SRC_URI = " \
     file://50-lorawan-sshd.conf \
     file://10-lorawan-watchdog.conf \
     file://10-lorawan-wait-online.conf \
+    file://mosquitto-lorawan.conf \
+    file://10-lorawan-mosquitto.conf \
+    file://lorawan-mqtt-bridge.tmpfiles \
 "
 
 # Set by the machine (board layer): the Concentratord model of the board's concentrator.
@@ -76,18 +79,25 @@ do_install() {
             ${D}${sysconfdir}/systemd/system/multi-user.target.wants/wpa_supplicant@wlan0.service
     fi
 
+    # Mosquitto: localhost only as before, plus the directory the panel writes the Home Assistant bridge into
+    install -d ${D}${sysconfdir}/mosquitto ${D}${systemd_system_unitdir}/mosquitto.service.d ${D}${nonarch_libdir}/tmpfiles.d
+    install -m 0644 ${UNPACKDIR}/mosquitto-lorawan.conf ${D}${sysconfdir}/mosquitto/lorawan.conf
+    install -m 0644 ${UNPACKDIR}/10-lorawan-mosquitto.conf ${D}${systemd_system_unitdir}/mosquitto.service.d/
+    install -m 0644 ${UNPACKDIR}/lorawan-mqtt-bridge.tmpfiles ${D}${nonarch_libdir}/tmpfiles.d/lorawan-mqtt-bridge.conf
+
     install -d ${D}${systemd_unitdir}/system.conf.d
     install -m 0644 ${UNPACKDIR}/10-lorawan-watchdog.conf ${D}${systemd_unitdir}/system.conf.d/
 }
 
 SYSTEMD_SERVICE:${PN} = "lorawan-secrets.service"
 
-FILES:${PN} += "${systemd_system_unitdir} ${systemd_unitdir}/system.conf.d"
+FILES:${PN} += "${systemd_system_unitdir} ${systemd_unitdir}/system.conf.d ${nonarch_libdir}/tmpfiles.d"
 CONFFILES:${PN} = " \
     ${sysconfdir}/chirpstack/chirpstack.toml \
     ${sysconfdir}/chirpstack-concentratord/concentratord.toml \
     ${sysconfdir}/chirpstack-mqtt-forwarder/chirpstack-mqtt-forwarder.toml \
     ${sysconfdir}/chirpstack-udp-forwarder/chirpstack-udp-forwarder.toml \
+    ${sysconfdir}/mosquitto/lorawan.conf \
 "
-RDEPENDS:${PN} = "chirpstack chirpstack-concentratord chirpstack-mqtt-forwarder chirpstack-udp-forwarder"
+RDEPENDS:${PN} = "chirpstack chirpstack-concentratord chirpstack-mqtt-forwarder chirpstack-udp-forwarder mosquitto"
 RRECOMMENDS:${PN} = "${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'wpa-supplicant', '', d)}"

@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+# The panel (lorawan-agent, root) writes the Home Assistant bridge here; Mosquitto (its own user) includes it.
+# setgid: files written here belong to the mosquitto group, readable by Mosquitto, not by other users.
+d /var/lib/lorawan-mqtt-bridge 2750 root mosquitto -

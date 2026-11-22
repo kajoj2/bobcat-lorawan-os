@@ -64,10 +64,13 @@ svg line { stroke: var(--line); }
 .files { margin: 6px 0 10px; padding-left: 18px; }
 .files li { margin: 2px 0; }
 a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
-button, input[type=text], textarea { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+button, input[type=text], input[type=password], textarea { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--card); color: var(--text); }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; cursor: pointer; }
 label.opt { display: block; margin: 4px 0; }
+.form { display: grid; grid-template-columns: max-content minmax(0, 320px); gap: 6px 10px; align-items: center; margin: 8px 0; }
+.form input[type=text], .form input[type=password] { width: 100%; box-sizing: border-box; }
+@media (max-width: 520px) { .form { grid-template-columns: minmax(0, 1fr); } }
 button.danger { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 600; cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 details summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 8px 0; }
@@ -96,6 +99,7 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card wide"><h2>Network</h2><div id="net"></div></section>
   <section class="card wide" id="update-card" hidden><h2>System update</h2><div id="update"></div></section>
   <section class="card wide" id="forward-card" hidden><h2>Community networks</h2><div id="forward"></div></section>
+  <section class="card wide" id="bridge-card" hidden><h2>Home Assistant (MQTT)</h2><div id="bridge"></div></section>
   <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
 <footer id="foot"></footer>
@@ -388,6 +392,82 @@ async function forward() {
   forwardTimer = setTimeout(forward, 10000);
 }
 forward();
+
+// --- Home Assistant: Mosquitto bridge to another MQTT broker -----------------------------------------------------
+const BSTATE = { connected: ["ok", "connected"], disconnected: ["bad", "not connected (retrying)"], unknown: ["info", "connecting…"] };
+let bridgeTimer = null, bridgeEditing = false;
+
+function renderBridge(d) {
+  $("bridge-card").hidden = false;
+  if (bridgeEditing) return; // do not throw away what is being typed
+  const p = d.prefix || "";
+  let h = `<p>Send what ChirpStack publishes for your devices (uplinks with decoded values, joins, acknowledgements) to ` +
+    `another MQTT broker, such as Home Assistant's Mosquitto add-on. The gateway connects out to that broker; its own ` +
+    `broker stays closed to the network.</p>`;
+  if (d.configured) {
+    const [c, l] = BSTATE[d.state] || ["warn", d.state];
+    h += `<dl><dt>Broker</dt><dd class="mono">${esc(d.server)}${d.tls ? " (TLS)" : ""}</dd>` +
+      `<dt>State</dt><dd><span class="st ${c}"></span>${l}${d.since ? ` · ${ago(d.now, d.since)}` : ""}</dd>` +
+      `<dt>Uplinks on</dt><dd class="mono">${esc(p)}application/&lt;application ID&gt;/device/&lt;DevEUI&gt;/event/up</dd>` +
+      (d.downlinks ? `<dt>Downlinks from</dt><dd class="mono">${esc(p)}application/&lt;application ID&gt;/device/&lt;DevEUI&gt;/command/down</dd>` : "") +
+      `<dt>Client ID</dt><dd class="mono">${esc(d.client_id)}</dd></dl>` +
+      `<p class="note">“Not connected”: check the address, the user and password (a user of the broker; in Home Assistant, a user ` +
+      `for the Mosquitto add-on), and that the broker's port is reachable from the gateway.</p>`;
+  } else {
+    h += `<p class="note">Off: nothing is sent.</p>`;
+  }
+  h += `<details${d.configured ? "" : " open"}><summary>${d.configured ? "Change" : "Connect"}</summary><div class="form">` +
+    `<label for="br-server">Broker</label><input type="text" id="br-server" placeholder="homeassistant.local or host:port" value="${esc(d.server)}">` +
+    `<label for="br-user">User name</label><input type="text" id="br-user" autocomplete="off" value="${esc(d.username)}">` +
+    `<label for="br-pass">Password</label><input type="password" id="br-pass" autocomplete="new-password" placeholder="${d.password_set ? "unchanged" : ""}">` +
+    `<label for="br-prefix">Topic prefix</label><input type="text" id="br-prefix" class="mono" value="${esc(p)}">` +
+    `</div>` +
+    `<label class="opt"><input type="checkbox" id="br-tls"${d.tls ? " checked" : ""}> TLS (the broker's certificate must be signed by a public CA; port 8883 by default)</label>` +
+    `<label class="opt"><input type="checkbox" id="br-down"${d.downlinks ? " checked" : ""}> Accept downlinks from that broker</label>` +
+    `<p><button class="primary" id="br-save">Save</button>${d.configured ? ` <button id="br-off">Turn off</button>` : ""} <span class="note" id="br-msg"></span></p>` +
+    `<p class="note">Saving asks for a ChirpStack login (the account you use on port 8080; admin/admin until you change it) and restarts the gateway's MQTT broker (a few seconds). ` +
+    `Without a port: 1883, or 8883 with TLS. The password is stored on the gateway and never shown again; leave it empty to keep it.</p></details>`;
+  const open = document.querySelector("#bridge details")?.open;
+  $("bridge").innerHTML = h;
+  if (open !== undefined) document.querySelector("#bridge details").open = open;
+  const editing = () => { bridgeEditing = true; };
+  document.querySelectorAll("#bridge input").forEach(x => x.addEventListener("input", editing));
+  $("br-save").addEventListener("click", () => saveBridge(false));
+  if ($("br-off")) $("br-off").addEventListener("click", () => saveBridge(true));
+}
+
+async function saveBridge(off) {
+  const msg = $("br-msg"), body = new URLSearchParams();
+  if (off) body.append("action", "off");
+  else {
+    body.append("server", $("br-server").value);
+    body.append("username", $("br-user").value);
+    body.append("password", $("br-pass").value);
+    body.append("prefix", $("br-prefix").value);
+    if ($("br-tls").checked) body.append("tls", "on");
+    if ($("br-down").checked) body.append("downlinks", "on");
+  }
+  document.querySelectorAll("#bridge button").forEach(b => b.disabled = true);
+  try {
+    // Ask for the login first (the browser shows its dialog).
+    let r = await fetch("api/bridge/login", { cache: "no-store" });
+    if (r.ok) r = await fetch("api/bridge/save", { method: "POST", body });
+    msg.textContent = await r.text();
+    if (r.ok) bridgeEditing = false;
+  } catch (e) { msg.textContent = e.message; }
+  document.querySelectorAll("#bridge button").forEach(b => b.disabled = false);
+  if (!bridgeEditing) setTimeout(bridge, 3000);
+}
+
+async function bridge() {
+  clearTimeout(bridgeTimer);
+  try {
+    const r = await fetch("api/bridge", { cache: "no-store" });
+    if (r.ok) renderBridge(await r.json());
+  } catch (e) { /* the status card already shows a dead gateway */ }
+  bridgeTimer = setTimeout(bridge, 10000);
+}
+bridge();
 
 // --- Internal storage (eMMC): backups and install ---------------------------------------------------------------
 const gb = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1e6))} MB`;
