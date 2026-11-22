@@ -107,3 +107,9 @@ Steps:
 
 Open: a wM-Bus meter in range to test with; T1 decoding (3-out-of-6) in software if the radio can only deliver
 raw bits.
+
+## Not possible: spectral scan on the panel
+
+A noise and interference view of the 868 MHz band needs the SX1261 that some SX1302 cards carry for listen before
+talk and spectral scan (libloragw's `spectral_scan`). The G285's card has only the SX1302 and two SX1250
+(docs/lorawan-agent.md), so there is nothing to scan with. Dropped 2026-11-22.

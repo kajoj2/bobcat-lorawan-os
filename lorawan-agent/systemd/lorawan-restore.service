@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+# The panel's "Restore a backup": puts the uploaded backup in place, then restarts the gateway.
+[Unit]
+Description=Restore the gateway's settings and ChirpStack data from a backup
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/lorawan-agent.md
+ConditionPathExists=/var/lib/lorawan-update/restore.tar.gz
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lorawan-backup restore /var/lib/lorawan-update/restore.tar.gz
+# Also after a failed restore: the services it stopped come back with the restart
+ExecStopPost=/bin/rm -f /var/lib/lorawan-update/restore.tar.gz
+ExecStopPost=/bin/systemctl --no-block reboot

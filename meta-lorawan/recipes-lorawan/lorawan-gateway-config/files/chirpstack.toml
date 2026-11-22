@@ -26,6 +26,10 @@
   # (Mosquitto listens on localhost only); turn it off before opening the broker to other gateways.
   allow_unknown_gateways = true
 
+[monitoring]
+  # Prometheus metrics, on localhost only: the panel passes them on at http://<gateway>/metrics/chirpstack
+  bind = "127.0.0.1:8070"
+
 [integration]
   enabled = ["mqtt"]
 

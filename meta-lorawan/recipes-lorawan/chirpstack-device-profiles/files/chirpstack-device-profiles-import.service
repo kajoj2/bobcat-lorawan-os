@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MIT
+# Imports the device profiles shipped in the image (/usr/share/chirpstack-device-profiles) into ChirpStack's
+# database: on the first boot, and once after an update brings a newer copy (docs/lorawan-agent.md). Profiles
+# imported before are updated in place; device profiles of your own are not touched.
+[Unit]
+Description=Import ChirpStack's device profile repository
+Documentation=https://github.com/chirpstack/chirpstack-device-profiles
+After=chirpstack.service lorawan-secrets.service
+Wants=chirpstack.service
+
+[Service]
+Type=oneshot
+User=chirpstack
+Group=chirpstack
+EnvironmentFile=/var/lib/lorawan-secrets/chirpstack.env
+# Once per revision of the repository
+ExecCondition=/bin/sh -c '! cmp -s /usr/share/chirpstack-device-profiles/REVISION /var/lib/chirpstack/device-profiles.revision'
+# ChirpStack runs its database migrations at start: wait for it to have done so
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do systemctl is-active --quiet chirpstack && exit 0; sleep 2; done; exit 1'
+ExecStart=/usr/bin/chirpstack -c /etc/chirpstack import-device-profiles --dir /usr/share/chirpstack-device-profiles
+ExecStartPost=/bin/cp /usr/share/chirpstack-device-profiles/REVISION /var/lib/chirpstack/device-profiles.revision
+ProtectSystem=strict
+ReadWritePaths=/var/lib/chirpstack
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

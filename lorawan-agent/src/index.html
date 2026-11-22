@@ -98,9 +98,13 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card"><h2>System</h2><dl id="system"></dl></section>
   <section class="card wide"><h2>Last frames</h2><div class="scroll" id="frames"></div></section>
   <section class="card wide"><h2>Network</h2><div id="net"></div></section>
+  <section class="card wide" id="devices-card" hidden><h2>Devices</h2><div id="devices"></div></section>
   <section class="card wide" id="update-card" hidden><h2>System update</h2><div id="update"></div></section>
   <section class="card wide" id="forward-card" hidden><h2>Community networks</h2><div id="forward"></div></section>
   <section class="card wide" id="bridge-card" hidden><h2>Home Assistant (MQTT)</h2><div id="bridge"></div></section>
+  <section class="card wide" id="ble-card" hidden><h2>BLE sensors</h2><div id="ble"></div></section>
+  <section class="card wide" id="wg-card" hidden><h2>Remote access (WireGuard)</h2><div id="wg"></div></section>
+  <section class="card wide" id="backup-card" hidden><h2>Backup</h2><div id="backup"></div></section>
   <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
 <footer id="foot"></footer>
@@ -280,9 +284,11 @@ function renderUpdate(d) {
       `<p><input type="file" id="upd-file" accept=".raucb"> <button class="primary" id="upd-go" disabled>Upload and install</button></p>` +
       `<p class="note" id="upd-note">Asks for a ChirpStack login (the account you use on port 8080; admin/admin until you change it).</p></details>`;
   }
+  h += `<div id="releases"></div>`;
   const open = document.querySelector("#update details")?.open;
   const file = $("upd-file") && $("upd-file").files[0];
   $("update").innerHTML = h;
+  if (!updateBusy && uploadPct === null) { if (releasesLast) renderReleases(releasesLast); else releases(); }
   if (open !== undefined && document.querySelector("#update details")) document.querySelector("#update details").open = open;
   if ($("upd-file")) {
     $("upd-file").addEventListener("change", () => { $("upd-go").disabled = !$("upd-file").files.length; });
@@ -568,6 +574,204 @@ async function storage() {
   storageTimer = setTimeout(storage, installing ? 2000 : 30000);
 }
 storage();
+
+// --- Shared: ask for the ChirpStack login (the browser shows its dialog), then POST a form ----------------------
+async function loginPost(area, path, form) {
+  const r = await fetch(`api/${area}/login`, { cache: "no-store" });
+  if (!r.ok) return r;
+  return fetch(`api/${area}/${path}`, { method: "POST", body: new URLSearchParams(form) });
+}
+const fmtBytes = b => b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.round(b / 1e3)} kB`;
+
+// --- Updates from GitHub releases (inside the System update card) -----------------------------------------------
+let releasesLast = null, releasesBusy = false;
+function renderReleases(d) {
+  const box = $("releases");
+  if (!box || !d || !d.enabled) { if (box) box.innerHTML = ""; return; }
+  const newer = d.releases.filter(r => r.newer);
+  let h = `<h3 style="font-size:14px;margin:12px 0 4px">From GitHub</h3><p class="note">Releases of <span class="mono">${esc(d.repo)}</span>` +
+    ` · running <span class="mono">${esc(d.current || "?")}</span>` +
+    (d.checked ? ` · checked ${ago(Math.floor(Date.now() / 1000), d.checked)}` : "") + ` <button id="rel-check">Check now</button></p>`;
+  if (d.error) h += `<div class="badbox">Could not read the releases: ${esc(d.error)}</div>`;
+  if (d.current === "dev") h += `<p class="note">This system is a local build ("dev"): any release counts as different, none as newer.</p>`;
+  else if (!d.error) h += newer.length ? `<div class="warnbox"><b>${esc(newer[0].tag)} is available.</b></div>` : `<p class="note">No newer release.</p>`;
+  if (d.releases.length) {
+    h += `<div class="scroll"><table><tr><th>Release</th><th>Published</th><th class="r">Size</th><th></th></tr>` +
+      d.releases.slice(0, 6).map(r => `<tr><td><a class="dl" href="${esc(r.notes)}" target="_blank" rel="noopener">${esc(r.tag)}</a>` +
+        `${r.prerelease ? ` <span class="note">pre-release</span>` : ""}${r.running ? ` <span class="tok">running</span>` : ""}</td>` +
+        `<td>${esc((r.published || "").slice(0, 10))}</td><td class="r">${fmtBytes(r.size)}</td>` +
+        `<td>${r.running ? "" : `<button class="${r.newer ? "primary" : ""}" data-tag="${esc(r.tag)}">Install</button>`}</td></tr>`).join("") +
+      `</table></div><p class="note" id="rel-msg">Installing downloads the bundle onto the gateway and installs it into the other slot; it asks for a ChirpStack login. ` +
+      `Only bundles signed with the key this system trusts are accepted.</p>`;
+  }
+  box.innerHTML = h;
+  $("rel-check").addEventListener("click", async () => {
+    $("rel-check").disabled = true;
+    try { const r = await fetch("api/releases", { method: "POST" }); if (r.ok) { releasesLast = await r.json(); renderReleases(releasesLast); } } catch (e) {}
+  });
+  box.querySelectorAll("button[data-tag]").forEach(b => b.addEventListener("click", async () => {
+    if (updateBusy) return;
+    box.querySelectorAll("button").forEach(x => x.disabled = true);
+    try {
+      const r = await loginPost("update", "download", { tag: b.dataset.tag });
+      $("rel-msg").textContent = r.ok ? "Downloading…" : await r.text();
+    } catch (e) { $("rel-msg").textContent = e.message; }
+    updatePoll();
+  }));
+}
+async function releases() {
+  try { const r = await fetch("api/releases", { cache: "no-store" }); if (r.ok) { releasesLast = await r.json(); renderReleases(releasesLast); } } catch (e) {}
+}
+
+// --- Devices: last uplinks and alerts for silent devices --------------------------------------------------------
+let devicesTimer = null, devicesEditing = false;
+function renderDevices(d) {
+  $("devices-card").hidden = false;
+  const rows = d.devices.map(x => `<tr><td>${x.silent ? `<span class="st bad"></span>` : `<span class="st ok"></span>`}${esc(x.name || "–")}</td>` +
+    `<td>${esc(x.application || "–")}</td><td class="mono">${esc(x.dev_eui)}</td><td>${ago(d.now, x.last_seen)}</td>` +
+    `<td>${x.interval ? dur(x.interval) : "–"}</td><td class="r">${x.rssi ?? "–"} / ${x.snr ?? "–"}</td>` +
+    `<td>${x.silent ? `<span class="tbad">silent</span>` : `after ${dur(x.silent_after)}`}</td></tr>`).join("");
+  let h = d.devices.length ? `<div class="scroll"><table><tr><th>Device</th><th>Application</th><th>DevEUI</th><th>Last uplink</th>` +
+      `<th>Usually every</th><th class="r">RSSI / SNR</th><th>Alert</th></tr>${rows}</table></div>`
+    : `<p class="empty">No uplinks seen yet. Devices appear here with their first uplink through the local ChirpStack.</p>`;
+  if (!d.mqtt_connected) h += `<p class="note">Not connected to the gateway's MQTT broker (retrying).</p>`;
+  const keep = devicesEditing && $("dev-form");
+  if (keep) { $("dev-list").innerHTML = h; return; }
+  $("devices").innerHTML = `<div id="dev-list">${h}</div>` +
+    `<details id="dev-form"><summary>Alerts</summary><p>A device is <b>silent</b> when nothing came for longer than the threshold and three of its usual intervals. ` +
+    `Each change is published on <span class="mono">lorawan/alerts/&lt;DevEUI&gt;</span> (the Home Assistant card passes it on, with a problem sensor per device), ` +
+    `and can go to a webhook: an <a class="dl" href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> topic URL, or any URL that takes a plain text POST.</p>` +
+    `<div class="form"><label for="dev-th">Threshold (minutes)</label><input type="text" id="dev-th" value="${d.threshold_min}">` +
+    `<label for="dev-hook">Webhook URL</label><input type="text" id="dev-hook" placeholder="${d.webhook ? `set (${esc(d.webhook)}); empty keeps it` : "https://ntfy.sh/your-topic"}"></div>` +
+    `<p><button class="primary" id="dev-save">Save</button>${d.webhook ? ` <button id="dev-test">Send a test</button> <button id="dev-clear">Remove the webhook</button>` : ""} <span class="note" id="dev-msg"></span></p></details>`;
+  document.querySelectorAll("#devices input").forEach(x => x.addEventListener("input", () => { devicesEditing = true; }));
+  const act = async (path, form) => {
+    document.querySelectorAll("#devices button").forEach(b => b.disabled = true);
+    try { const r = await loginPost("devices", path, form); $("dev-msg").textContent = await r.text(); if (r.ok) devicesEditing = false; }
+    catch (e) { $("dev-msg").textContent = e.message; }
+    document.querySelectorAll("#devices button").forEach(b => b.disabled = false);
+  };
+  $("dev-save").addEventListener("click", () => act("save", { threshold_min: $("dev-th").value, webhook: $("dev-hook").value }));
+  if ($("dev-test")) $("dev-test").addEventListener("click", () => act("test", {}));
+  if ($("dev-clear")) $("dev-clear").addEventListener("click", () => act("save", { webhook_clear: "on" }));
+}
+async function devices() {
+  clearTimeout(devicesTimer);
+  try { const r = await fetch("api/devices", { cache: "no-store" }); if (r.ok) renderDevices(await r.json()); } catch (e) {}
+  devicesTimer = setTimeout(devices, 15000);
+}
+devices();
+
+// --- BLE sensors ------------------------------------------------------------------------------------------------
+let bleTimer = null;
+function renderBle(d) {
+  $("ble-card").hidden = !d.available;
+  if (!d.available) return;
+  const sensors = (d.data && d.data.sensors) || [], now = (d.data && d.data.now) || 0;
+  const UNIT = { temperature: " °C", humidity: " %", battery: " %", voltage: " V", pressure: " hPa", illuminance: " lx", co2: " ppm", moisture: " %" };
+  const vals = s => Object.entries(s).filter(([k]) => !["mac", "type", "name", "rssi", "seen"].includes(k))
+    .map(([k, v]) => `${esc(k.replace("_", " "))} <b>${esc(v)}${UNIT[k] || ""}</b>`).join(" · ");
+  let h = `<p>Thermometers and other sensors that advertise their readings over Bluetooth LE (BTHome, Xiaomi with the pvvx or ATC firmware, ` +
+    `unencrypted MiBeacon, RuuviTag) are published on <span class="mono">lorawan/ble/&lt;MAC&gt;</span>, and reach Home Assistant through its card with discovery entries. ` +
+    `The gateway only listens.</p><p><label class="opt"><input type="checkbox" id="ble-on"${d.enabled ? " checked" : ""}> Listen for BLE sensors</label> ` +
+    `<span class="note" id="ble-msg">${d.enabled && !d.running ? "not running: journalctl -u lorawan-ble" : ""}</span></p>`;
+  if (d.running) h += sensors.length ? `<div class="scroll"><table><tr><th>Sensor</th><th>Type</th><th>Readings</th><th class="r">RSSI</th><th>Heard</th></tr>` +
+      sensors.map(s => `<tr><td>${esc(s.name || s.mac)}<br><span class="note mono">${esc(s.mac)}</span></td><td>${esc(s.type)}</td><td style="white-space:normal">${vals(s)}</td>` +
+        `<td class="r">${s.rssi}</td><td>${ago(now, s.seen)}</td></tr>`).join("") + `</table></div>`
+    : `<p class="empty">No sensors heard yet.</p>`;
+  $("ble").innerHTML = h;
+  $("ble-on").addEventListener("change", async () => {
+    $("ble-on").disabled = true;
+    try { const r = await loginPost("ble", "save", $("ble-on").checked ? { enabled: "on" } : {}); $("ble-msg").textContent = await r.text(); }
+    catch (e) { $("ble-msg").textContent = e.message; }
+    setTimeout(ble, 2000);
+  });
+}
+async function ble() {
+  clearTimeout(bleTimer);
+  try { const r = await fetch("api/ble", { cache: "no-store" }); if (r.ok) renderBle(await r.json()); } catch (e) {}
+  bleTimer = setTimeout(ble, 10000);
+}
+ble();
+
+// --- Remote access (WireGuard) ----------------------------------------------------------------------------------
+let wgTimer = null, wgEditing = false;
+function renderWg(d) {
+  $("wg-card").hidden = !d.available;
+  if (!d.available || wgEditing) return;
+  const now = Math.floor(Date.now() / 1000);
+  let h = `<p>A WireGuard tunnel to a server or VPN you run: the panel, ChirpStack and SSH then answer on the gateway's tunnel address, also behind NAT. ` +
+    `The gateway connects out, so nothing has to be opened on its network.</p>`;
+  if (d.configured) {
+    h += `<dl><dt>State</dt><dd>${d.active ? `<span class="st ok"></span>up` : `<span class="st bad"></span>down`}</dd>` +
+      `<dt>Gateway's public key</dt><dd class="mono">${esc(d.public_key)}</dd>` +
+      d.peers.map(p => `<dt>Peer</dt><dd><span class="mono">${esc(p.public_key.slice(0, 12))}…</span> ${esc(p.endpoint)} · ` +
+        `${p.handshake ? `handshake ${ago(now, p.handshake)}` : `<span class="tbad">no handshake yet</span>`} · ↓${fmtBytes(p.rx)} ↑${fmtBytes(p.tx)}</dd>`).join("") + `</dl>`;
+  }
+  h += `<details${d.configured ? "" : " open"}><summary>${d.configured ? "Change" : "Set up"}</summary>` +
+    `<p>1. <button id="wg-key">Show the gateway's public key</button> <span class="mono" id="wg-pub">${esc(d.public_key)}</span><br>` +
+    `Add it as a peer on your server (with the gateway's tunnel address in its AllowedIPs). The private key never leaves the gateway.</p>` +
+    `<p>2. The gateway's side, as a wg-quick file without PrivateKey (it is filled in) and without DNS, PreUp or PostUp:</p>` +
+    `<textarea id="wg-conf" rows="9" class="mono" style="width:100%" placeholder="[Interface]\nAddress = 10.8.0.5/32\n\n[Peer]\nPublicKey = (your server's key)\nEndpoint = vpn.example.org:51820\nAllowedIPs = 10.8.0.0/24\nPersistentKeepalive = 25">${esc(d.config)}</textarea>` +
+    `<p><button class="primary" id="wg-save">Save and connect</button>${d.configured ? ` <button id="wg-off">Turn off</button>` : ""} <span class="note" id="wg-msg"></span></p>` +
+    `<p class="note">Asks for a ChirpStack login. PersistentKeepalive keeps the tunnel open through NAT. A ListenPort is opened in the gateway's firewall.</p></details>`;
+  const open = document.querySelector("#wg details")?.open;
+  $("wg").innerHTML = h;
+  if (open !== undefined) document.querySelector("#wg details").open = open;
+  $("wg-conf").addEventListener("input", () => { wgEditing = true; });
+  const act = async form => {
+    document.querySelectorAll("#wg button").forEach(b => b.disabled = true);
+    let r;
+    try { r = await loginPost("wireguard", "save", form); $("wg-msg").textContent = await r.text(); }
+    catch (e) { $("wg-msg").textContent = e.message; }
+    document.querySelectorAll("#wg button").forEach(b => b.disabled = false);
+    return r;
+  };
+  $("wg-key").addEventListener("click", async () => {
+    const r = await act({ action: "key" });
+    if (r && r.ok) { $("wg-pub").textContent = $("wg-msg").textContent; $("wg-msg").textContent = ""; }
+  });
+  $("wg-save").addEventListener("click", async () => { const r = await act({ config: $("wg-conf").value }); if (r && r.ok) { wgEditing = false; setTimeout(wg, 3000); } });
+  if ($("wg-off")) $("wg-off").addEventListener("click", async () => { await act({ action: "off" }); wgEditing = false; setTimeout(wg, 1000); });
+}
+async function wg() {
+  clearTimeout(wgTimer);
+  try { const r = await fetch("api/wireguard", { cache: "no-store" }); if (r.ok) renderWg(await r.json()); } catch (e) {}
+  wgTimer = setTimeout(wg, 15000);
+}
+wg();
+
+// --- Backup -----------------------------------------------------------------------------------------------------
+function renderBackup(d) {
+  $("backup-card").hidden = !d.available;
+  if (!d.available) return;
+  $("backup").innerHTML = `<p>One file with ChirpStack's data (devices, keys, applications, profiles) and the gateway's settings ` +
+    `(Wi-Fi, community networks, Home Assistant, alerts, remote access, SSH keys, firewall rules). Keep it safe: it holds every password and key of the gateway.</p>` +
+    `<p><button class="primary" id="bk-dl">Download a backup</button> <span class="note" id="bk-msg"></span></p>` +
+    `<details><summary>Restore a backup</summary><p>Replaces ChirpStack's data and the settings with the backup's, then restarts the gateway. ` +
+    `A backup from another gateway works too: this one then adds itself to ChirpStack next to the old one.</p>` +
+    `<p><input type="file" id="bk-file" accept=".gz,.tar.gz"> <button class="danger" id="bk-go" disabled>Restore and restart</button></p>` +
+    `<p class="note" id="bk-note">Asks for a ChirpStack login.</p></details>`;
+  $("bk-dl").addEventListener("click", async () => {
+    $("bk-msg").textContent = "";
+    const r = await fetch("api/backup/login", { cache: "no-store" });
+    if (r.ok) location.href = "api/backup/download"; else $("bk-msg").textContent = await r.text();
+  });
+  $("bk-file").addEventListener("change", () => { $("bk-go").disabled = !$("bk-file").files.length; });
+  $("bk-go").addEventListener("click", async () => {
+    const f = $("bk-file").files[0], note = $("bk-note");
+    if (!f) return;
+    $("bk-go").disabled = true;
+    const l = await fetch("api/backup/login", { cache: "no-store" });
+    if (!l.ok) { note.textContent = await l.text(); $("bk-go").disabled = false; return; }
+    note.textContent = "Uploading…";
+    const r = await fetch("api/backup/restore", { method: "POST", body: f, headers: { "Content-Type": "application/gzip" } })
+      .catch(e => ({ ok: false, text: async () => e.message }));
+    note.textContent = await r.text();
+    if (!r.ok) $("bk-go").disabled = false;
+  });
+}
+fetch("api/backup", { cache: "no-store" }).then(r => r.json()).then(renderBackup).catch(() => {});
 </script>
 </body>
 </html>

@@ -25,7 +25,7 @@ to say which hardware the image runs on.
 | Supported | Bobcat Miner 300, board revision **G285** (serial number starts with `285`), EU868 |
 | SoC | Rockchip RK3566, 4x Cortex-A55, 2 GB LPDDR4X, 64 GB eMMC |
 | Radio | SX1302 + 2x SX1250 on a mini-PCIe style card (SPI) |
-| Network | 100 Mbit Ethernet, BCM43430 Wi-Fi (WPA2/WPA3 client); Bluetooth works but is not used yet |
+| Network | 100 Mbit Ethernet, BCM43430 Wi-Fi (WPA2/WPA3 client) and Bluetooth LE (BLE sensors to MQTT) |
 | Planned | G280, G290/G295 (other RK3566 revisions), US915 |
 
 Hardware notes, each fact with its source: [docs/hardware-g285.md](docs/hardware-g285.md).
@@ -53,6 +53,10 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
   or another community network next to the local ChirpStack, set on the web panel: [docs/forwarding.md](docs/forwarding.md).
 - Optional, off by default: a bridge from the gateway's MQTT broker to **Home Assistant**'s (or any other) broker,
   set on the web panel: [docs/home-assistant.md](docs/home-assistant.md).
+- On the panel as well: updates straight from GitHub releases, backup and restore, alerts for devices that went
+  silent (MQTT, Home Assistant, ntfy), Prometheus metrics at `/metrics`, remote access over WireGuard
+  ([docs/remote-access.md](docs/remote-access.md)), BLE sensors to MQTT ([docs/ble.md](docs/ble.md)), and
+  ChirpStack's device profile repository for adding devices by vendor and model.
 - systemd, systemd-networkd (DHCP on Ethernet and Wi-Fi), OpenSSH (keys only), Avahi (`*.local`), hardware
   watchdog, GNU tools and bash (no busybox), zram swap.
 - A **firewall** (nftables) that only lets in SSH, the panel, ChirpStack and mDNS ([SECURITY.md](SECURITY.md)); on

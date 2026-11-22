@@ -38,6 +38,13 @@ Everything else is refused (TCP reset, ICMP unreachable), nothing is forwarded b
   file, `systemctl start lorawan-firewall`.
 - `nft list ruleset` shows what is loaded. A factory reset removes the extra rules and the "off" switch.
 
+## What the panel guards with the ChirpStack login
+
+Installing a system (upload or from GitHub), downloading or restoring a backup (it holds every password and key of
+the gateway), the remote access tunnel, the Home Assistant bridge, the Devices card's settings (the webhook URL often
+carries a token), the BLE switch and the eMMC page need a ChirpStack login. Read-only views (status, `/metrics`, the
+lists) do not.
+
 ## Read-only system
 
 A gateway installed on the eMMC runs its system partition read-only (docs/updates.md): nothing changes the

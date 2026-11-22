@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+# BLE sensors to MQTT (docs/ble.md): switched on and off on the panel ("BLE sensors" card).
+[Unit]
+Description=BLE sensors to MQTT
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/ble.md
+ConditionPathExists=/var/lib/lorawan-ble/enabled
+After=bluetooth.service mosquitto.service sys-subsystem-bluetooth-devices-hci0.device
+Wants=mosquitto.service
+
+[Service]
+ExecStart=/usr/bin/lorawan-agent ble
+Restart=always
+RestartSec=10
+RuntimeDirectory=lorawan-ble
+# A raw HCI socket needs CAP_NET_RAW, bringing hci0 up CAP_NET_ADMIN; nothing else
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+DynamicUser=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_BLUETOOTH
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

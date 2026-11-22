@@ -262,3 +262,43 @@ class LorawanGatewayTest(OERuntimeTestCase):
         status, output = self.target.run("test -e /sys/class/zram-control && swapon --show=NAME --noheadings")
         if status == 0:
             self.assertIn("/dev/zram", output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
+    def test_metrics_and_devices(self):
+        status, output = self.wait_for("wget -q -O - http://127.0.0.1/metrics")
+        self.assertEqual(status, 0, msg=output)
+        self.assertIn("# TYPE lorawan_rx_frames_total counter", output)
+        self.assertIn('lorawan_service_up{unit="chirpstack"} 1', output)
+        status, output = self.target.run("wget -q -O - http://127.0.0.1/api/devices")
+        self.assertEqual(status, 0, msg=output)
+        self.assertIn('"threshold_min":60', output)
+        # ChirpStack's own metrics through the panel (monitoring endpoint on localhost)
+        status, output = self.wait_for("wget -q -O - http://127.0.0.1/metrics/chirpstack", timeout=120)
+        self.assertEqual(status, 0, msg=output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
+    def test_backup_round_trip(self):
+        status, output = self.target.run(
+            "/usr/libexec/lorawan-backup create /tmp/b.tar.gz && /usr/libexec/lorawan-backup check /tmp/b.tar.gz "
+            "&& tar -tzf /tmp/b.tar.gz")
+        self.assertEqual(status, 0, msg=output)
+        self.assertIn("chirpstack/chirpstack.sqlite", output)
+        self.assertIn("lorawan-secrets/", output)
+        # A file with anything else in it is refused
+        status, output = self.target.run(
+            "mkdir -p /tmp/x/etc && echo format=lorawan-backup 1 > /tmp/x/manifest.txt && touch /tmp/x/etc/passwd "
+            "&& tar -czf /tmp/bad.tar.gz -C /tmp/x manifest.txt etc && /usr/libexec/lorawan-backup check /tmp/bad.tar.gz")
+        self.assertNotEqual(status, 0, msg=output)
+        self.target.run("rm -rf /tmp/b.tar.gz /tmp/bad.tar.gz /tmp/x")
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
+    def test_device_profiles_imported(self):
+        status, output = self.wait_for(
+            "cmp /usr/share/chirpstack-device-profiles/REVISION /var/lib/chirpstack/device-profiles.revision")
+        self.assertEqual(status, 0, msg=self.journal("chirpstack-device-profiles-import"))
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_services_active"])
+    def test_wireguard_card(self):
+        status, output = self.target.run("wget -q -O - http://127.0.0.1/api/wireguard")
+        self.assertIn('"available":true', output)
+        self.assertIn('"configured":false', output)

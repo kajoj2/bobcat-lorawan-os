@@ -44,8 +44,9 @@ no card to flash again.
 | Gone | Kept |
 |---|---|
 | Wi-Fi network | the system itself (and the other A/B slot) |
-| ChirpStack: devices, applications, users, so the login is admin / admin again, and its Redis state | SSH host keys and authorized keys |
-| community networks, Home Assistant bridge | the machine ID (same DHCP address) |
+| ChirpStack: devices, applications, users, so the login is admin / admin again, and its Redis state | SSH host keys and the image's authorized keys |
+| SSH keys added in `/var/lib/lorawan-ssh/authorized_keys` | |
+| community networks, Home Assistant bridge, device alerts, remote access (WireGuard), BLE switch, extra firewall rules | the machine ID (same DHCP address) |
 | setup wizard state, ChirpStack registration (redone on the next boot), first-boot secrets (made again) | the Helium key, if any (the hotspot's identity) |
 
 After the restart the gateway has no network, so the setup network opens 2 minutes later. By hand:
