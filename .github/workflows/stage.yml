@@ -198,6 +198,7 @@ jobs:
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.xz
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.bmap
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.manifest
+            ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-bobcat-g285.rootfs.spdx.json
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-bundle-bobcat-g285.raucb
           compression-level: 0
           retention-days: 14

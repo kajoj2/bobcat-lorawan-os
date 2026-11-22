@@ -61,6 +61,13 @@ jobs:
           name: images-unsigned
           path: build
 
+      # The CVE report of the same image (full-build's cve job), published next to it when the check ran
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: cve-report
+          path: cve
+
       - name: Install RAUC
         run: |
           sudo apt-get update -qq
@@ -108,6 +115,7 @@ jobs:
           cp build/lorawan-gateway-image-bobcat-g285.rootfs.wic.bmap "images/$base.wic.bmap"
           cp build/lorawan-gateway-image-bobcat-g285.rootfs.manifest "images/$base.manifest"
           cp "$BUNDLE" "images/$base.raucb"
+          if [ -f cve/lorawan-gateway-image.cve.txt ]; then cp cve/lorawan-gateway-image.cve.txt "images/$base.cve.txt"; fi
           ls -l images
 
       - name: Checksums

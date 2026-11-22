@@ -224,3 +224,41 @@ class LorawanGatewayTest(OERuntimeTestCase):
             "wget -S -q -O - --post-data 'ssid=x&psk=12345678' http://127.0.0.1/api/setup/wifi 2>&1")
         self.assertIn("401", output)
         self.target.run("rm -f /var/lib/lorawan-setup/done")
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_gnu_tools(self):
+        # GNU tools instead of busybox (packagegroup-lorawan-base-utils), bash for root
+        status, output = self.target.run("test ! -e /bin/busybox && readlink -f /bin/sh && grep ^root: /etc/passwd")
+        self.assertEqual(status, 0, msg="busybox is installed\n%s" % output)
+        self.assertIn("/bin/bash", output)
+        for cmd in ("head -c 4 /dev/zero | base64", "timeout 5 true", "printenv PATH", "install -d -m 700 /tmp/t && find /tmp/t -delete"):
+            status, output = self.target.run(cmd)
+            self.assertEqual(status, 0, msg="%s: %s" % (cmd, output))
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_firewall(self):
+        # The rule set is loaded and refuses ports nothing should offer; SSH (this test's own connection) works.
+        status, output = self.target.run("systemctl is-active lorawan-firewall && nft list table inet lorawan")
+        self.assertEqual(status, 0, msg="%s\n%s" % (output, self.journal("lorawan-firewall")))
+        self.assertIn("policy drop", output)
+        self.assertIn("tcp dport { 22, 80, 8080 } accept", output)
+        # Extra rules from the data partition are read
+        status, output = self.target.run(
+            "echo 'tcp dport 9999 accept' > /var/lib/lorawan-firewall/test.nft && systemctl reload lorawan-firewall "
+            "&& nft list chain inet lorawan input; rm -f /var/lib/lorawan-firewall/test.nft; "
+            "systemctl reload lorawan-firewall")
+        self.assertIn("tcp dport 9999 accept", output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_root_noatime(self):
+        status, output = self.target.run("findmnt -no OPTIONS /")
+        self.assertIn("noatime", output)
+
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
+    def test_zram_swap(self):
+        # The QEMU kernel may come without zram; then the unit does nothing and stays successful.
+        status, output = self.target.run("systemctl is-active lorawan-zram")
+        self.assertEqual(status, 0, msg="%s\n%s" % (output, self.journal("lorawan-zram")))
+        status, output = self.target.run("test -e /sys/class/zram-control && swapon --show=NAME --noheadings")
+        if status == 0:
+            self.assertIn("/dev/zram", output)

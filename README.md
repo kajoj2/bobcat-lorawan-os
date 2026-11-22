@@ -54,7 +54,9 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
 - Optional, off by default: a bridge from the gateway's MQTT broker to **Home Assistant**'s (or any other) broker,
   set on the web panel: [docs/home-assistant.md](docs/home-assistant.md).
 - systemd, systemd-networkd (DHCP on Ethernet and Wi-Fi), OpenSSH (keys only), Avahi (`*.local`), hardware
-  watchdog.
+  watchdog, GNU tools and bash (no busybox), zram swap.
+- A **firewall** (nftables) that only lets in SSH, the panel, ChirpStack and mDNS ([SECURITY.md](SECURITY.md)); on
+  the eMMC a **read-only system partition**, with settings, data and the journal on the data partition.
 - Secrets (ChirpStack API secret) are generated on each gateway's first boot, never baked into the image.
 
 The image boots from a **microSD card** and does not touch the eMMC: remove the card and the factory firmware boots

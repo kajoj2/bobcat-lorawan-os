@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Compressed swap in RAM (zram)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/architecture.md
+DefaultDependencies=no
+# Not after local-fs.target: tmp.mount waits for swap.target, and local-fs.target for tmp.mount (a cycle systemd
+# would break by dropping /tmp). Only /usr is needed, which the root file system has.
+After=systemd-modules-load.service
+Before=swap.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/lorawan-zram start
+ExecStop=/usr/libexec/lorawan-zram stop
+
+[Install]
+WantedBy=swap.target

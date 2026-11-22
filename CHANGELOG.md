@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+- System: GNU tools and bash instead of busybox; a firewall (nftables) that only lets in SSH, the panel,
+  ChirpStack and mDNS (SECURITY.md); half the RAM as zstd compressed swap (zram); `noatime` and a weekly `fstrim`;
+  no `pam` and `ext2` distro features. On the eMMC the system partition is read-only and the journal is kept on the
+  data partition (survives restarts); the Wi-Fi network moved to `/var/lib/lorawan-wifi` (moved there by itself
+  after an update), extra SSH keys go into `/var/lib/lorawan-ssh/authorized_keys` (docs/updates.md). CI checks
+  the image's packages for known CVEs (sbom-cve-check) and releases carry the report.
+
 - Home Assistant: the panel's "Home Assistant (MQTT)" card bridges ChirpStack's application events from the gateway's
   local Mosquitto to another broker (Home Assistant's Mosquitto add-on), with a topic prefix, optional TLS and
   optional downlinks back; the gateway's own broker stays on localhost (docs/home-assistant.md). Tested on a board

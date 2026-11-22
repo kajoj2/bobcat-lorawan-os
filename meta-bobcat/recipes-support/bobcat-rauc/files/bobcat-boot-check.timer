@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Check 10 minutes after boot that the A/B slot became good
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/updates.md
+ConditionKernelCommandLine=rauc.slot
+
+[Timer]
+OnBootSec=10min
+
+[Install]
+WantedBy=timers.target

@@ -14,7 +14,9 @@ pub const SERVICES: [&str; 5] = [
     "redis",
     "chirpstack",
 ];
-pub const WIFI_CONFIG: &str = "/etc/wpa_supplicant/wpa_supplicant-wlan0.conf";
+/// The Wi-Fi network (wpa_supplicant's configuration), on the data partition: the root file system of an A/B
+/// slot is read-only (docs/updates.md).
+pub const WIFI_CONFIG: &str = "/var/lib/lorawan-wifi/wpa_supplicant-wlan0.conf";
 
 #[derive(Clone, Debug, Default)]
 pub struct Iface {

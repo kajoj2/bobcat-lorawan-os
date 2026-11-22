@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Swap in compressed RAM (lorawan-zram.service): half of the memory as a zram device (zstd), used before the
+# kernel has to kill a process. On a kernel without zram it does nothing.
+set -eu
+case "${1:-start}" in
+start)
+    modprobe zram 2>/dev/null || true
+    if [ ! -e /sys/class/zram-control ]; then
+        echo "lorawan-zram: no zram in this kernel"
+        exit 0
+    fi
+    kib=$(awk '/^MemTotal:/ { print int($2 / 2) }' /proc/meminfo)
+    dev=$(zramctl --find --size "${kib}KiB" --algorithm zstd 2>/dev/null || zramctl --find --size "${kib}KiB")
+    mkswap -L zram "$dev" >/dev/null
+    swapon --priority 100 "$dev"
+    echo "lorawan-zram: $dev, $((kib / 1024)) MiB"
+    ;;
+stop)
+    for dev in $(awk '$1 ~ /^\/dev\/zram/ { print $1 }' /proc/swaps); do
+        swapoff "$dev" && zramctl --reset "$dev"
+    done
+    ;;
+*)
+    echo "usage: lorawan-zram start|stop" >&2
+    exit 2
+    ;;
+esac

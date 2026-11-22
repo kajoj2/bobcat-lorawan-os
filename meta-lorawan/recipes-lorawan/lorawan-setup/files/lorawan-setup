@@ -16,12 +16,12 @@ ADDR=192.168.4.1
 RUN=/run/lorawan-setup
 STATE=/var/lib/lorawan-setup
 NETFILE=/run/systemd/network/10-lorawan-setup.network
-WPA_CONF=/etc/wpa_supplicant/wpa_supplicant-$IFACE.conf
+WPA_DIR=/var/lib/lorawan-wifi
+WPA_CONF=$WPA_DIR/wpa_supplicant-$IFACE.conf
 JOIN_TIMEOUT=45
 
-# busybox has no install(1)
 put() {
-    cp "$1" "$2.new" && chmod 0600 "$2.new" && mv -f "$2.new" "$2"
+    install -m 0600 "$1" "$2.new" && mv -f "$2.new" "$2"
 }
 
 log() { echo "lorawan-setup: $*" >&2; }
@@ -121,8 +121,7 @@ wifi() {
     mkdir -p "$RUN"
     rm -f "$RUN/wifi.conf.old"
     [ ! -f "$WPA_CONF" ] || cp -p "$WPA_CONF" "$RUN/wifi.conf.old"
-    mkdir -p /etc/wpa_supplicant
-    chmod 0700 /etc/wpa_supplicant
+    install -d -m 0700 "$WPA_DIR"
     if ! put "$new" "$WPA_CONF"; then
         result failed "could not write $WPA_CONF" ""
         return 0
@@ -199,11 +198,9 @@ factory_reset() {
     command -v redis-cli >/dev/null && redis-cli flushall >/dev/null 2>&1
     rm -f "$WPA_CONF"
     for d in /var/lib/chirpstack /var/lib/lorawan-agent /var/lib/lorawan-forward /var/lib/lorawan-mqtt-bridge \
-        /var/lib/lorawan-setup /var/lib/lorawan-secrets /var/lib/lorawan-update; do
-        # (busybox find has no -delete) the contents, not the directory: tmpfiles/StateDirectory own its mode
-        for f in "$d"/* "$d"/.[!.]*; do
-            [ -e "$f" ] && rm -rf "$f"
-        done
+        /var/lib/lorawan-setup /var/lib/lorawan-secrets /var/lib/lorawan-update /var/lib/lorawan-firewall; do
+        # The contents, not the directory: tmpfiles/StateDirectory own its mode
+        [ ! -d "$d" ] || find "$d" -mindepth 1 -delete
     done
     sync
     log "factory reset done, restarting"

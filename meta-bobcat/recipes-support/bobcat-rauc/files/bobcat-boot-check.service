@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+# A slot that started but never became good (no network, SSH or panel: rauc-mark-good did not run) restarts, so
+# U-Boot's boot counter can do its job and fall back to the other slot after three tries. Without this, a system
+# stuck without its services but with a running kernel would stay so until someone pulls the plug.
+[Unit]
+Description=Restart an A/B slot that did not become good
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/updates.md
+ConditionKernelCommandLine=rauc.slot
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'systemctl is-active --quiet rauc-mark-good.service && exit 0; \
+    echo "slot not marked good 10 minutes after boot, restarting"; systemctl --no-block reboot'
