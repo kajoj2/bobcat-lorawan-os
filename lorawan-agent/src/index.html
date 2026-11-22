@@ -348,6 +348,7 @@ function renderForward(d) {
   } else {
     h += `<p class="note">Off: nothing leaves the gateway.</p>`;
   }
+  if (d.helium) h += heliumBox(d.helium);
   const custom = on.filter(x => !d.presets.some(p => p.server === x));
   h += `<details${d.servers.length ? "" : " open"}><summary>Choose networks</summary>` +
     d.presets.map(p => `<label class="opt"><input type="checkbox" name="fwd" value="${esc(p.server)}"${on.includes(p.server) ? " checked" : ""}> ${esc(p.label)}</label>`).join("") +
@@ -363,6 +364,20 @@ function renderForward(d) {
   const editing = () => { forwardEditing = true; };
   document.querySelectorAll("#forward input, #forward textarea").forEach(x => x.addEventListener("input", editing));
   $("fwd-save").addEventListener("click", saveForward);
+}
+
+// Helium: the hotspot's identity for onboarding and whether it reaches Helium's packet router (docs/helium.md).
+function heliumBox(x) {
+  const docs = `<a class="dl" href="https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/helium.md" target="_blank" rel="noopener">docs/helium.md</a>`;
+  if (x.service !== "active") return `<p><b>Helium:</b> <span class="st bad"></span>gateway ${esc(x.service || "not running")} (see ${docs}).</p>`;
+  if (!x.key) return `<p><b>Helium:</b> <span class="st info"></span>starting…</p>`;
+  const router = x.router_connected ? `<span class="st ok"></span>connected to the Helium packet router`
+    : `<span class="st bad"></span>not connected to the Helium packet router`;
+  return `<p><b>Helium hotspot</b> ${esc(x.name)}<br><span class="note mono">${esc(x.key)}</span><br>${router}.</p>` +
+    `<p class="note">Helium only takes frames from an onboarded hotspot. Once, with your own wallet: on the gateway ` +
+    `<span class="mono">helium_gateway add --owner &lt;wallet&gt; --payer &lt;wallet&gt;</span>, then on your computer ` +
+    `<span class="mono">helium-wallet hotspots add iot --lat … --lon … &lt;txn&gt; --commit</span>. Steps and costs: ${docs}. ` +
+    `Back up <span class="mono">/var/lib/helium-gateway/gateway_key.bin</span>: without it the hotspot is gone.</p>`;
 }
 
 async function saveForward() {

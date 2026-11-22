@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MIT
+[Unit]
+Description=Helium gateway (data-only hotspot on the Helium IoT network)
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/helium.md
+After=network-online.target
+Wants=network-online.target
+Before=chirpstack-udp-forwarder.service
+
+[Service]
+# Runs only while the panel's server list has the Helium entry (the panel starts and stops it as well).
+# Exit status 1 skips the unit; grep's 2 (no file) would count as a failure, hence the `|| exit 1`.
+ExecCondition=/bin/sh -c 'grep -qsF 127.0.0.1:1680 /var/lib/lorawan-forward/servers.toml || exit 1'
+ExecStart=/usr/bin/helium_gateway -c /etc/helium_gateway/settings.toml server
+Restart=always
+RestartSec=10
+# Needs no privileges: UDP on localhost, gRPC out, its key in its state directory
+# (/var/lib/private/helium-gateway, reached through the /var/lib/helium-gateway link).
+DynamicUser=yes
+StateDirectory=helium-gateway
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

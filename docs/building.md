@@ -51,7 +51,9 @@ item.
 1. Bump the version and `SRCREV` in the recipe.
 2. Regenerate the crate list from the new `Cargo.lock`:
    `tools/cargo-crates-inc.py https://raw.githubusercontent.com/chirpstack/<repo>/v<version>/Cargo.lock <recipe> > <recipe>-crates.inc`
-   (or `bitbake -c update_crates <recipe>` on a build host).
+   (or `bitbake -c update_crates <recipe>` on a build host). Git dependencies end up as `# git:` comments: the
+   recipe fetches each repository with `name=` and `destsuffix=` and its own `SRCREV_<name>` (see
+   `helium-gateway_1.3.0.bb`).
 3. Update `LIC_FILES_CHKSUM` if the license file changed.
 4. `tools/check-crates-inc.sh` checks every crate list against its recipe's `SRCREV` (CI runs it too).
 

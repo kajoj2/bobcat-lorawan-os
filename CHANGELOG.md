@@ -15,6 +15,10 @@
   server next to the local ChirpStack; servers chosen on the panel (card "Community networks", no login yet),
   off by default (docs/forwarding.md).
 
+- Helium: the Helium gateway (gateway-rs, main after 1.3.0) as a data-only hotspot with its own key, chosen on the
+  same card; the card shows the hotspot's name, address and router connection, docs/helium.md has the onboarding.
+  `tools/cargo-crates-inc.py` lists git dependencies, `tools/check-crates-inc.sh` checks their revisions.
+
 First version, written before the first board arrived. Builds; not booted yet.
 
 - Machine `bobcat-g285` (Bobcat Miner 300, G285, RK3566) on meta-rockchip, Linux 6.18, U-Boot 2026.01.
