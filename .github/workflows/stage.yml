@@ -42,6 +42,10 @@ on:
         description: Update CA certificate (PEM) to build into the image instead of the throwaway one, for a release
         type: string
         default: ""
+      images-name:
+        description: Name of the artifact with the image and the bundle (final stage)
+        type: string
+        default: images
 
 permissions:
   contents: read
@@ -172,7 +176,7 @@ jobs:
         if: inputs.final && success()
         uses: actions/upload-artifact@v7
         with:
-          name: images
+          name: ${{ inputs.images-name }}
           path: |
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.xz
             ${{ env.KAS_WORK_DIR }}/build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-*.rootfs.wic.bmap

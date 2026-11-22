@@ -14,7 +14,8 @@ slot to start next.
 
 On the panel (`http://<gateway>/`), card "System update" (shown when the gateway was started as an A/B slot):
 
-1. "Install an update", choose the bundle (`lorawan-gateway-bundle-bobcat-g285.raucb`), "Upload and install". The
+1. "Install an update", choose the bundle (`lorawan-gateway-os-<version>-bobcat-g285.raucb` from a release,
+   `lorawan-gateway-bundle-bobcat-g285.raucb` from your own build), "Upload and install". The
    browser asks for a ChirpStack login (the account of the web interface on port 8080). The default admin/admin
    works too; while ChirpStack has it, the card warns that anyone on your network can install a system (only
    bundles signed with your build's key are accepted).

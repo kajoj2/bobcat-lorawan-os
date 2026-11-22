@@ -52,12 +52,13 @@ jobs:
       id-token: write
       attestations: write
     env:
-      BUNDLE: images/lorawan-gateway-bundle-bobcat-g285.raucb
+      BUNDLE: build/lorawan-gateway-bundle-bobcat-g285.raucb
     steps:
+      # The build's files, the bundle still signed with the build's throwaway key
       - uses: actions/download-artifact@v8
         with:
-          name: images
-          path: images
+          name: images-unsigned
+          path: build
 
       - name: Install RAUC
         run: |
@@ -95,6 +96,18 @@ jobs:
           # What a gateway checks before installing
           rauc --conf="$keys/system.conf" info "$keys/signed.raucb"
           mv "$keys/signed.raucb" "$BUNDLE"
+
+      # Release file names carry the version: tag v0.1.0 gives lorawan-gateway-os-0.1.0-bobcat-g285.wic.xz.
+      # bmaptool finds the .wic.bmap next to the .wic.xz by itself.
+      - name: Name the files
+        run: |
+          base="lorawan-gateway-os-${GITHUB_REF_NAME#v}-bobcat-g285"
+          mkdir images
+          cp build/lorawan-gateway-image-bobcat-g285.rootfs.wic.xz "images/$base.wic.xz"
+          cp build/lorawan-gateway-image-bobcat-g285.rootfs.wic.bmap "images/$base.wic.bmap"
+          cp build/lorawan-gateway-image-bobcat-g285.rootfs.manifest "images/$base.manifest"
+          cp "$BUNDLE" "images/$base.raucb"
+          ls -l images
 
       - name: Checksums
         working-directory: images

@@ -5,7 +5,9 @@ A tag `v*` starts `.github/workflows/release.yml`:
 1. The full build (`full-build.yml`), with the project's update CA built into the image instead of a throwaway one.
    It starts from the newest full build's shared state, so with an unchanged lock file it takes well under an hour.
 2. The job `publish` waits for a maintainer to approve the `release` environment (the run's page, "Review
-   deployments"). Look at the build first: the `images` artifact can go onto a board before you approve.
+   deployments"). Look at the build first: the image in the run's `images-unsigned` artifact can go onto a board
+   before you approve. Its bundle is still signed with the build's throwaway key, so a gateway with the project's
+   CA refuses it ("unable to get local issuer certificate"): the bundle to install is only on the release page.
 3. Once approved: the update bundle is signed again with the project's key (`rauc resign`) and checked against the
    CA, `SHA256SUMS` is written, every file gets a build provenance attestation, and the GitHub release is published
    with notes from the merged pull requests. A tag with a suffix (`v0.1.0-rc1`) makes a pre-release.
@@ -17,19 +19,21 @@ git push origin v0.1.0
 
 ## What the release holds
 
+File names carry the version from the tag (`v0.1.0` gives `0.1.0`):
+
 | File | What |
 |---|---|
-| `lorawan-gateway-image-bobcat-g285.rootfs.wic.xz` | the SD card image (docs/flashing.md) |
-| `lorawan-gateway-image-bobcat-g285.rootfs.wic.bmap` | block map for `bmaptool copy` |
-| `lorawan-gateway-image-bobcat-g285.rootfs.manifest` | the installed packages and versions |
-| `lorawan-gateway-bundle-bobcat-g285.raucb` | the update bundle, signed with the project's key (docs/updates.md) |
+| `lorawan-gateway-os-0.1.0-bobcat-g285.wic.xz` | the SD card image (docs/flashing.md) |
+| `lorawan-gateway-os-0.1.0-bobcat-g285.wic.bmap` | block map for `bmaptool copy` |
+| `lorawan-gateway-os-0.1.0-bobcat-g285.manifest` | the installed packages and versions |
+| `lorawan-gateway-os-0.1.0-bobcat-g285.raucb` | the update bundle, signed with the project's key (docs/updates.md) |
 | `SHA256SUMS` | checksums of the above |
 
 Checking a download:
 
 ```sh
 sha256sum -c SHA256SUMS
-gh attestation verify lorawan-gateway-bundle-bobcat-g285.raucb -R kajoj2/bobcat-lorawan-os
+gh attestation verify lorawan-gateway-os-0.1.0-bobcat-g285.raucb -R kajoj2/bobcat-lorawan-os
 ```
 
 The attestation proves the file came out of this repository's release workflow, from the tagged commit.

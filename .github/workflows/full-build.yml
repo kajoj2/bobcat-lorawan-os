@@ -170,3 +170,5 @@ jobs:
       targets: lorawan-gateway-image lorawan-gateway-bundle
       final: true
       ca-cert: ${{ inputs.release && vars.RAUC_CA_CERT || '' }}
+      # A release's bundle is only signed with the project's key in release.yml: this artifact is not for installing
+      images-name: ${{ inputs.release && 'images-unsigned' || 'images' }}
