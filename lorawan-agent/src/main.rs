@@ -2,7 +2,7 @@
 //! lorawan-agent: the gateway's own status service.
 //!
 //!   lorawan-agent serve      web panel on port 80 (with the forwarding, Home Assistant, update and eMMC
-//!                            pages), LED status
+//!                            pages and the setup wizard), LED status, setup access point trigger
 //!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
@@ -17,6 +17,7 @@ mod mqtt;
 mod pb;
 mod radio;
 mod register;
+mod setup;
 mod status;
 mod storage;
 mod sys;
@@ -33,6 +34,7 @@ use std::time::{Duration, Instant};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const INDEX: &str = include_str!("index.html");
+const SETUP: &str = include_str!("setup.html");
 const DEFAULT_BROKER: &str = "127.0.0.1:1883";
 const DEFAULT_LISTEN: &str = "[::]:80";
 
@@ -105,6 +107,8 @@ fn serve(args: &[String]) -> ExitCode {
         });
     }
 
+    setup::spawn();
+
     let listener = match http::bind(&listen) {
         Ok(l) => l,
         Err(e) => {
@@ -134,8 +138,36 @@ fn serve(args: &[String]) -> ExitCode {
             build_status(&radio, system, started, true)
         };
         let get = req.method != "POST";
+        if let Some(r) = setup::captive_redirect(req.peer, req.header("host")) {
+            return r;
+        }
         match (get, req.path.as_str()) {
+            // A phone on the setup network came for the wizard.
+            (true, "/") if setup::via_ap(req.peer) => {
+                Response::new(302, "text/plain", "").with_header("Location", "/setup")
+            }
             (true, "/" | "/index.html") => Response::new(200, "text/html; charset=utf-8", INDEX),
+            (true, "/setup") => Response::new(200, "text/html; charset=utf-8", SETUP),
+            (true, "/api/setup") => Response::new(
+                200,
+                "application/json",
+                setup::info_json(req.peer, storage::available()),
+            ),
+            (true, "/api/setup/scan") => Response::new(200, "application/json", setup::scan_json()),
+            // Open on the setup network and until the wizard has been finished once; afterwards changing the
+            // Wi-Fi from the LAN needs the ChirpStack login, like the other cards that change the system.
+            (false, p) if p.starts_with("/api/setup/") => {
+                if !setup::via_ap(req.peer) && setup::done() {
+                    if let Some(denied) = login_required(&auth, req) {
+                        return denied;
+                    }
+                }
+                match &p["/api/setup/".len()..] {
+                    "wifi" => setup::save_wifi(&req.body),
+                    "done" => setup::finish(),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
             (true, "/api/status") => Response::new(200, "application/json", status().to_json()),
             (true, "/api/status.txt") => {
                 Response::new(200, "text/plain; charset=utf-8", status().to_text())

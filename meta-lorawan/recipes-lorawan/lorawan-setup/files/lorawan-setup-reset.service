@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT
+# Factory reset: the gateway's settings and data as on a freshly flashed system, then a restart. Started by
+# lorawan-agent when the board's button is held for 15 s (docs/setup.md); by hand: systemctl start lorawan-setup-reset
+[Unit]
+Description=Factory reset of the gateway's settings and data
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/setup.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lorawan-setup factory-reset

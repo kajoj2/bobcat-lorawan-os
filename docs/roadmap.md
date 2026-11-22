@@ -2,7 +2,7 @@
 # Roadmap: more from the hardware
 
 Features planned on top of the gateway, each with what it needs, the steps and the open points. Order is a
-suggestion: 7 and 5 make the gateway easier to use, 6 makes it last, 4 and 9 are for later.
+suggestion: 7 makes the gateway easier to use, 6 makes it last, 4 and 9 are for later.
 
 ## Done: boot firmware
 
@@ -42,26 +42,16 @@ Steps:
 
 Open: which states are worth a colour; brightness at night (an option to turn the RGB LED off).
 
-## 5. Wi-Fi setup without a cable or console
+## Done: setup wizard (was 5, Wi-Fi setup without a cable or console)
 
-Today Wi-Fi is set over SSH or the serial console (docs/flashing.md). Goal: set it from a phone.
+docs/setup.md: a gateway without a network (or with the button held 5 s) opens an open setup access point; a
+phone joins it, and a wizard on the panel sets Wi-Fi (falling back to the access point when the join fails), the
+community networks and the install onto the eMMC. Open on purpose (owner's choice, 2026-11-22): a new gateway has
+no screen for a password; it runs only while setting up, for 15 minutes at most.
 
-Design:
-- The SARADC button (adc-keys, already in the device tree) held for 5 s, or no network at all 2 minutes after
-  boot, starts a setup access point `bobcat-setup-XXXX` (last 4 hex digits of the MAC), WPA2 with a per-device
-  password generated on the first boot and printed on the serial console and in `/etc/issue`; never an open
-  network. It stops after 15 minutes or once Wi-Fi is configured.
-- The BCM43430 supports AP mode under brcmfmac; `hostapd` for the AP, systemd-networkd with `DHCPServer=yes`
-  for addresses.
-- A one-page form (network list from a scan, passphrase) served by busybox `httpd` with a CGI script that writes
-  `wpa_supplicant-wlan0.conf` the same way docs/flashing.md does. Same page later for the ChirpStack admin
-  password and MQTT credentials (an open item of its own).
-
-Steps: button input daemon (`triggerhappy` or a tiny evdev reader), AP unit + network file, the CGI page, a
-QEMU test for the CGI script, a board test (AP and client mode switching with brcmfmac's `feature_disable`).
-
-Open: AP and station at the same time (brcmfmac allows it on some firmware) to keep Ethernet users unaffected;
-how to show the AP password on a board without a screen (console, a label printed at install).
+Still open: access point and client at the same time (brcmfmac on some firmware), so Ethernet and Wi-Fi users stay
+connected while it is open; a LED colour for "setup network open" (with item 7); the same page for the ChirpStack
+admin password and MQTT credentials.
 
 ## 6. Run from the eMMC, and keep local history
 

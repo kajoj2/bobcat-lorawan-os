@@ -140,7 +140,9 @@ RKBOOT/RK3566MINIALL.ini`, then `rkdeveloptool db rk356x_loader_*.bin`) and writ
 
 ## Wi-Fi
 
-Wi-Fi is not configured in the image. On the gateway (over Ethernet or the serial console):
+Wi-Fi is not configured in the image. The easy way is the setup wizard from a phone (docs/setup.md): a gateway
+without a network opens the setup network `bobcat-setup-XXXX` about two minutes after power-on. By hand, on the
+gateway (over Ethernet or the serial console):
 
 ```sh
 mkdir -p /etc/wpa_supplicant

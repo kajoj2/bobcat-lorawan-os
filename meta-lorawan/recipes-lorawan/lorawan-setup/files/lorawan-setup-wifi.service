@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Joins the Wi-Fi network chosen in the setup wizard (lorawan-agent writes the configuration into
+# /var/lib/lorawan-setup and starts this); back to the old configuration and the setup access point if it fails.
+[Unit]
+Description=Join the Wi-Fi network chosen in the setup wizard
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/setup.md
+ConditionPathExists=/var/lib/lorawan-setup/wifi.conf.new
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lorawan-setup wifi

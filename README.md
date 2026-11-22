@@ -39,6 +39,8 @@ SX1302 ──SPI── ChirpStack Concentratord ──ZeroMQ── ChirpStack MQ
 
 - **Linux 6.18** (linux-yocto) with a device tree for the board written for mainline, **U-Boot 2026.01**.
 - **ChirpStack 4.20** (SQLite backend, no PostgreSQL), **Concentratord 4.7.1**, **MQTT Forwarder 4.6.1**.
+- **Setup wizard from a phone**: a new gateway opens a setup Wi-Fi network; the wizard sets Wi-Fi, community
+  networks and the eMMC install: [docs/setup.md](docs/setup.md).
 - **A/B system updates** with RAUC from the web panel, falling back to the old system if the new one does not
   start: [docs/updates.md](docs/updates.md). Each builder signs with its own keys (`tools/rauc-keys.sh`).
 - Optional, off by default: **UDP Forwarder 4.3.1** shares the gateway with [The Things Network](https://www.thethingsnetwork.org/)

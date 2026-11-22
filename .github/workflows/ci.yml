@@ -32,7 +32,8 @@ jobs:
       - name: Shell scripts
         run: |
           shellcheck tools/*.sh $(git ls-files '*.sh') meta-bobcat/recipes-support/bobcat-emmc/files/bobcat-emmc \
-            meta-bobcat/recipes-support/bobcat-rauc/files/bobcat-rauc-post-install
+            meta-bobcat/recipes-support/bobcat-rauc/files/bobcat-rauc-post-install \
+            meta-lorawan/recipes-lorawan/lorawan-setup/files/lorawan-setup
 
       - name: Recipes (oelint-adv, settings in .oelint.cfg)
         run: |

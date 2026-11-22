@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# The setup wizard's access point: an open network named <host>-setup-XXXX with a DHCP server, the wizard at
+# http://192.168.4.1/setup. Started by lorawan-agent (no network two minutes after boot, or the button held for
+# 5 s); never enabled. Stops after 15 minutes, when the wizard joins a network, or when it is finished.
+[Unit]
+Description=Setup access point for the gateway's setup wizard
+Documentation=https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/setup.md
+ConditionPathExists=/sys/class/net/wlan0/wireless
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/libexec/lorawan-setup ap-start
+ExecStart=/usr/sbin/hostapd /run/lorawan-setup/hostapd.conf
+ExecStartPost=/usr/libexec/lorawan-setup ap-up
+ExecStopPost=/usr/libexec/lorawan-setup ap-stop
+RuntimeMaxSec=15min
