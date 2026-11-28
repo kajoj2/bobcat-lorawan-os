@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 //! lorawan-agent: the gateway's own status service.
 //!
-//!   lorawan-agent serve      web panel on port 80 (with the forwarding, Home Assistant, update and eMMC
-//!                            pages and the setup wizard), LED status, setup access point trigger
+//!   lorawan-agent serve      web panel on port 80 (with the forwarding, Home Assistant, update, SSH key and
+//!                            eMMC pages and the setup wizard), LED status, setup access point trigger
 //!                            (lorawan-agent.service)
 //!   lorawan-agent register   add this gateway to the local ChirpStack (lorawan-agent-register.service)
 //!   lorawan-agent diag       print the status report (also installed as `lorawan-diag`)
@@ -25,6 +25,7 @@ mod radio;
 mod register;
 mod release;
 mod setup;
+mod ssh;
 mod status;
 mod storage;
 mod sys;
@@ -253,6 +254,19 @@ fn serve(args: &[String]) -> ExitCode {
                 match (get, &p["/api/ble/".len()..]) {
                     (true, "login") => Response::new(200, "text/plain", "ok\n"),
                     (false, "save") => ble::save(&req.body),
+                    _ => Response::new(404, "text/plain", "not found\n"),
+                }
+            }
+            (true, "/api/ssh") => Response::new(200, "application/json", ssh::info_json()),
+            // Who may log in as root: the list and changes behind the ChirpStack login
+            (_, p) if p.starts_with("/api/ssh/") => {
+                if let Some(denied) = login_required(&auth, req) {
+                    return denied;
+                }
+                match (get, &p["/api/ssh/".len()..]) {
+                    (true, "login") => Response::new(200, "text/plain", "ok\n"),
+                    (true, "keys") => Response::new(200, "application/json", ssh::list_json()),
+                    (false, "save") => ssh::save(&req.body),
                     _ => Response::new(404, "text/plain", "not found\n"),
                 }
             }
