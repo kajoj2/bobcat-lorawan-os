@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MIT
+name: Board report
+description: "Tried the image on a board (any revision): tell us whether it booted"
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports from untouched Bobcats (factory boot loader) and from revisions other than G285 help the most.
+        Remove the serial number's last digits, MAC addresses and gateway EUIs.
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board revision
+      description: The serial number on the label starts with it (285… is G285).
+      options: [G285, G280, G290, G295, other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Image version
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works (green LED, panel opens)
+        - No LED or factory firmware started
+        - LED stays red
+        - Boots, but something does not work
+    validations:
+      required: true
+  - type: checkboxes
+    id: history
+    attributes:
+      label: The board's history
+      options:
+        - label: Factory eMMC untouched (never flashed or cleared with rkdeveloptool)
+  - type: textarea
+    id: notes
+    attributes:
+      label: Details
+      description: What you did, what you saw; a serial console log if you have one.
+      render: text

@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+name: Problem with a gateway
+description: Something does not work on a gateway running LoRaWAN Gateway OS
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [docs/troubleshooting.md](https://github.com/kajoj2/bobcat-lorawan-os/blob/main/docs/troubleshooting.md) first.
+        Remove gateway EUIs, MAC addresses, serial numbers, keys and passwords from anything you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown on the panel (System update card) or in /etc/os-release; "dev" for your own build.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board revision
+      options: [G285, G280, G290, G295, other or unknown]
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Running from
+      options: [SD card, eMMC]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to see it
+  - type: textarea
+    id: report
+    attributes:
+      label: Gateway report
+      description: http://<gateway>/api/status.txt, or `lorawan-diag` over SSH; relevant `journalctl -b -u <service>` lines.
+      render: text

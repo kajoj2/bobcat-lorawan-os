@@ -20,6 +20,7 @@ check without logging in:
 | Metrics | `http://<gateway>/metrics` for Prometheus: radio counters per frequency, data rate and result, duty cycle, each device's last uplink and signal, service states, system numbers. ChirpStack's own metrics at `/metrics/chirpstack`. No login (read only, like the panel). |
 | Remote access | Card "Remote access (WireGuard)": a tunnel to your own WireGuard server so the gateway is reachable behind NAT (docs/remote-access.md). ChirpStack login. |
 | BLE sensors | Card "BLE sensors": BTHome, Xiaomi (pvvx/ATC firmware, unencrypted MiBeacon) and RuuviTag readings heard over Bluetooth LE, published on `lorawan/ble/<MAC>` with Home Assistant discovery (docs/ble.md). Off by default; switching needs a ChirpStack login. |
+| SSH keys | Card "SSH keys": public keys allowed to log in as root (`/var/lib/lorawan-ssh/authorized_keys`, read by sshd next to the image's own keys): add one by pasting a `.pub` line, list, remove. Plain keys only (no `command=` or other options). This is how a gateway flashed from a release image gets a shell. The count is public, the list and changes need a ChirpStack login. |
 | ChirpStack registration | On the first boot the gateway adds itself to the local ChirpStack (tenant "ChirpStack", name = host name, stats every 30 s), so it appears under Gateways without typing its EUI. |
 
 ## How it works

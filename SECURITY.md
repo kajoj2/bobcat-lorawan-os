@@ -6,7 +6,8 @@ repository), not in public issues.
 
 ## Defaults the image ships with
 
-- SSH accepts public keys only; there are no keys unless you add yours at build time (`LORAWAN_SSH_AUTHORIZED_KEYS`).
+- SSH accepts public keys only; there are no keys unless you add yours on the panel (card "SSH keys", behind the
+  ChirpStack login) or at build time (`LORAWAN_SSH_AUTHORIZED_KEYS`).
 - `root` has no password, which only the local consoles accept (serial pads inside the case, USB gadget).
 - The ChirpStack API secret is generated on the first boot of each gateway.
 - Mosquitto and Redis listen on localhost only.

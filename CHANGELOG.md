@@ -3,6 +3,14 @@
 
 ## Unreleased
 
+- Panel: an "SSH keys" card to add and remove the public keys that may log in as root, so a gateway flashed from a
+  release image (which has no key in it) can be reached over SSH; the setup wizard's last step points to it.
+  Keys survive updates, are in backups, and a factory reset removes them.
+
+- Docs: a quick start in the README, install steps on every release page, docs/troubleshooting.md, release file
+  names and checksum checks in docs/flashing.md, and AGENTS.md for AI coding agents (installing a gateway, and
+  working on the repository).
+
 - Panel: updates straight from the project's GitHub releases (list, "newer" marker, download and install); a Backup
   card (ChirpStack's data and all settings in one file, restore with a restart); a Devices card with each device's
   last uplink and alerts for silent devices (MQTT, Home Assistant problem sensors, ntfy/webhook); Prometheus metrics

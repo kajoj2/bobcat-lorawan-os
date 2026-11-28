@@ -9,17 +9,33 @@ No soldering, no USB tools and no changes to the board's eMMC: write the card, i
 
 ## Write the SD card
 
-Use a good microSD card (8 GB or more; an "endurance" or industrial card lasts much longer in a gateway). The
-image is `lorawan-gateway-os-<version>-bobcat-g285.wic.xz` from a release, or
-`lorawan-gateway-image-bobcat-g285.rootfs.wic.xz` from your own build.
+Use a good microSD card (8 GB or more; an "endurance" or industrial card lasts much longer in a gateway).
+
+Download from the [latest release](https://github.com/kajoj2/bobcat-lorawan-os/releases/latest):
+`lorawan-gateway-os-<version>-bobcat-g285.wic.xz`, and next to it `lorawan-gateway-os-<version>-bobcat-g285.wic.bmap`
+and `SHA256SUMS`. Check the download (on macOS `shasum -a 256 -c` instead of `sha256sum -c`):
 
 ```sh
-# Linux (bmaptool is faster and verifies the write)
-bmaptool copy lorawan-gateway-image-bobcat-g285.rootfs.wic.xz /dev/sdX
-
-# macOS / Linux without bmaptool
-xz -dc lorawan-gateway-image-bobcat-g285.rootfs.wic.xz | sudo dd of=/dev/rdiskN bs=4m
+sha256sum -c --ignore-missing SHA256SUMS
+# optional: proof that the file came from this repository's release workflow
+gh attestation verify lorawan-gateway-os-<version>-bobcat-g285.wic.xz -R kajoj2/bobcat-lorawan-os
 ```
+
+Then write it, with whichever you have:
+
+- **[balenaEtcher](https://etcher.balena.io/)** or **Raspberry Pi Imager** ("Choose OS" → "Use custom"): pick the
+  `.wic.xz` file as it is (no need to unpack), pick the card, write. Windows, macOS, Linux.
+- **Linux**, `bmaptool` (fast, verifies the write; finds the `.wic.bmap` next to the image):
+  `bmaptool copy lorawan-gateway-os-<version>-bobcat-g285.wic.xz /dev/sdX`
+- **macOS / Linux** with `dd` (find the card with `diskutil list` or `lsblk` first; the wrong disk is erased):
+
+  ```sh
+  xz -dc lorawan-gateway-os-<version>-bobcat-g285.wic.xz | sudo dd of=/dev/rdiskN bs=4m   # macOS
+  xz -dc lorawan-gateway-os-<version>-bobcat-g285.wic.xz | sudo dd of=/dev/sdX bs=4M conv=fsync   # Linux
+  ```
+
+From your own build the image is `build/tmp/deploy/images/bobcat-g285/lorawan-gateway-image-bobcat-g285.rootfs.wic.xz`
+(docs/building.md); it is written the same way.
 
 ## Boot
 
@@ -158,17 +174,20 @@ time from a public copy of Rockchip's rkwifibt package (`bobcat-wifibt-firmware`
 
 ## Log in
 
-- Network: `ssh root@bobcat-g285.local` with the key you put into `LORAWAN_SSH_AUTHORIZED_KEYS` at build time.
-  Passwords are refused over SSH.
+- Network: `ssh root@bobcat-g285.local`, with a key. Passwords are refused over SSH, and a release image has no
+  key in it: add your public key on the panel (`http://bobcat-g285.local/`, card "SSH keys"; asks for the
+  ChirpStack login). Paste the line from `~/.ssh/id_ed25519.pub` (`ssh-keygen -t ed25519` makes one). Your own
+  build can carry keys from the start (`LORAWAN_SSH_AUTHORIZED_KEYS`, README).
 - Serial console (debug pads on the board, 1500000 8N1, 3.3 V): `root`, no password.
 
 ## Set up ChirpStack
 
 1. Open `http://bobcat-g285.local:8080`, log in as `admin` / `admin` and **change the password at once** (ChirpStack
    creates this default user; the network does not reach the UI from outside your LAN unless you forward it).
-2. Gateways → Add gateway: the gateway EUI is in `journalctl -u chirpstack-concentratord` (`Gateway ID ...`).
-3. Add a device profile (region EU868) and your devices.
-4. Applications publish to the local broker: `mosquitto_sub -h localhost -t 'application/#' -v`.
+2. The gateway has added itself under Gateways on its first boot (name = host name); its EUI is also on the panel.
+3. Add a device profile (region EU868; the device-profile templates, imported on the first boot, have them by vendor
+   and model) and your devices.
+4. Applications publish to the local broker: `mosquitto_sub -h localhost -t 'application/#' -v` on the gateway.
 
-Opening the MQTT broker to the LAN (for Home Assistant on another host) is a manual step for now: add a listener
-with a password file in `/etc/mosquitto/`. A guided option is on the roadmap.
+The gateway's own broker only listens on localhost. To get the events into Home Assistant or another broker on your
+network, use the panel's "Home Assistant (MQTT)" card (docs/home-assistant.md).
