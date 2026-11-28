@@ -225,6 +225,28 @@ class LorawanGatewayTest(OERuntimeTestCase):
         self.assertIn("401", output)
         self.target.run("rm -f /var/lib/lorawan-setup/done")
 
+    @OETestDepends(["lorawan.LorawanGatewayTest.test_chirpstack_web"])
+    def test_ssh_keys_card(self):
+        # Public count, list and changes behind the ChirpStack login; a key added there is in sshd's second file
+        status, output = self.wait_for("wget -q -O - http://127.0.0.1/api/ssh")
+        self.assertEqual(status, 0, msg=self.journal("lorawan-agent"))
+        self.assertIn('"count":0', output)
+        status, output = self.target.run(
+            "wget -S -q -O - --post-data 'action=add&key=x' http://127.0.0.1/api/ssh/save 2>&1")
+        self.assertIn("401", output)
+        key = "ssh-ed25519+AAAAC3NzaC1lZDI1NTE5AAAAII6lbqLa1l7vjkyawdcWys6mOuwUqhFjH4O6y34RxSNT+oeqa"
+        login = "--user=admin --password=admin --auth-no-challenge"
+        status, output = self.target.run(
+            "wget -q -O - %s --post-data 'action=add&key=%s' http://127.0.0.1/api/ssh/save" % (login, key))
+        self.assertEqual(status, 0, msg=output)
+        status, output = self.target.run("stat -c '%a %U' /var/lib/lorawan-ssh/authorized_keys && "
+                                         "grep -c oeqa /var/lib/lorawan-ssh/authorized_keys")
+        self.assertEqual(output.split(), ["600", "root", "1"], msg=output)
+        status, output = self.target.run(
+            "wget -q -O - %s --post-data 'action=remove&index=0' http://127.0.0.1/api/ssh/save" % login)
+        self.assertEqual(status, 0, msg=output)
+        self.target.run("rm -rf /var/lib/lorawan-ssh")
+
     @OETestDepends(["lorawan.LorawanGatewayTest.test_boot_finished"])
     def test_gnu_tools(self):
         # GNU tools instead of busybox (packagegroup-lorawan-base-utils), bash for root

@@ -19,7 +19,8 @@ Flash the card (docs/flashing.md), put it into the gateway, power on. No cable, 
 5. **Internal storage** (boards with an eMMC, running from the card): optionally install the system with these
    settings onto the eMMC (docs/flashing.md, "Install onto the eMMC"). It erases the eMMC. It uses ChirpStack's
    default login (admin / admin) by itself and asks only if that password was changed.
-6. **Done**: links to the status panel and ChirpStack, the gateway EUI, and how to register the gateway on TTN.
+6. **Done**: links to the status panel and ChirpStack, the gateway EUI, how to register the gateway on TTN, and
+   where to add an SSH key (the panel's "SSH keys" card).
 
 A gateway on a network cable can use the same wizard at `http://<gateway>/setup` without the setup network: the
 Wi-Fi step is then optional. The status panel shows a link to the wizard until it has been finished once.
@@ -45,7 +46,7 @@ no card to flash again.
 |---|---|
 | Wi-Fi network | the system itself (and the other A/B slot) |
 | ChirpStack: devices, applications, users, so the login is admin / admin again, and its Redis state | SSH host keys and the image's authorized keys |
-| SSH keys added in `/var/lib/lorawan-ssh/authorized_keys` | |
+| SSH keys added on the panel (`/var/lib/lorawan-ssh/authorized_keys`) | |
 | community networks, Home Assistant bridge, device alerts, remote access (WireGuard), BLE switch, extra firewall rules | the machine ID (same DHCP address) |
 | setup wizard state, ChirpStack registration (redone on the next boot), first-boot secrets (made again) | the Helium key, if any (the hotspot's identity) |
 

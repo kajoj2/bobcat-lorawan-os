@@ -17,9 +17,10 @@ RestartSec=5
 # own service), the setup wizard's Wi-Fi request (/var/lib/lorawan-setup, installed by lorawan-setup-wifi) and
 # the Home Assistant bridge Mosquitto includes (/var/lib/lorawan-mqtt-bridge, created by tmpfiles.d with
 # Mosquitto's group), the Devices card's list and settings (/var/lib/lorawan-alerts), the WireGuard tunnel and its
-# firewall rule (/var/lib/lorawan-wireguard, /var/lib/lorawan-firewall) and the BLE switch (/var/lib/lorawan-ble)
+# firewall rule (/var/lib/lorawan-wireguard, /var/lib/lorawan-firewall), the BLE switch (/var/lib/lorawan-ble) and
+# the SSH keys card's authorized_keys (/var/lib/lorawan-ssh, read by sshd)
 ProtectSystem=strict
-StateDirectory=lorawan-forward lorawan-update lorawan-setup lorawan-alerts lorawan-wireguard lorawan-ble
+StateDirectory=lorawan-forward lorawan-update lorawan-setup lorawan-alerts lorawan-wireguard lorawan-ble lorawan-ssh
 ReadWritePaths=-/var/lib/lorawan-mqtt-bridge -/var/lib/lorawan-firewall
 ProtectHome=yes
 PrivateTmp=yes

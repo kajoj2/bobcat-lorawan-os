@@ -104,6 +104,7 @@ footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 24px; color: var(--m
   <section class="card wide" id="bridge-card" hidden><h2>Home Assistant (MQTT)</h2><div id="bridge"></div></section>
   <section class="card wide" id="ble-card" hidden><h2>BLE sensors</h2><div id="ble"></div></section>
   <section class="card wide" id="wg-card" hidden><h2>Remote access (WireGuard)</h2><div id="wg"></div></section>
+  <section class="card wide" id="ssh-card" hidden><h2>SSH keys</h2><div id="ssh"></div></section>
   <section class="card wide" id="backup-card" hidden><h2>Backup</h2><div id="backup"></div></section>
   <section class="card wide" id="storage-card" hidden><h2>Internal storage (eMMC)</h2><div id="storage"></div></section>
 </main>
@@ -740,6 +741,50 @@ async function wg() {
   wgTimer = setTimeout(wg, 15000);
 }
 wg();
+
+// --- SSH keys ---------------------------------------------------------------------------------------------------
+function renderSsh(d, list) {
+  $("ssh-card").hidden = !d.available;
+  if (!d.available) return;
+  const host = location.hostname || "the gateway";
+  let h = `<p>Public keys that may log in as <span class="mono">root</span> over SSH (passwords are refused): ` +
+    `<span class="mono">ssh root@${esc(host)}</span>. ` +
+    (d.count ? `${d.count} key${d.count > 1 ? "s" : ""} added here` : `No key added here yet`) +
+    (d.image_keys ? `, ${d.image_keys} built into the image` : "") + `.</p>`;
+  if (list) {
+    h += list.keys.length ? `<div class="scroll"><table><tr><th>Type</th><th>Comment</th><th>Key ends with</th><th></th></tr>` +
+      list.keys.map((k, i) => `<tr><td class="mono">${esc(k.type)}</td><td>${esc(k.comment)}</td><td class="mono">…${esc(k.tail)}</td>` +
+        `<td><button data-rm="${i}">Remove</button></td></tr>`).join("") + `</table></div>` : "";
+  } else if (d.count) {
+    h += `<p><button id="ssh-show">Show the keys</button></p>`;
+  }
+  h += `<details${d.count || d.image_keys ? "" : " open"}><summary>Add a key</summary>` +
+    `<p>Paste one line from your computer's <span class="mono">~/.ssh/id_ed25519.pub</span> (no key yet? <span class="mono">ssh-keygen -t ed25519</span>). Never the file without .pub.</p>` +
+    `<textarea id="ssh-key" rows="3" class="mono" style="width:100%" placeholder="ssh-ed25519 AAAAC3Nza… you@laptop"></textarea>` +
+    `<p><button class="primary" id="ssh-add">Add</button> <span class="note" id="ssh-msg"></span></p>` +
+    `<p class="note">Asks for a ChirpStack login. The keys survive updates and are in backups; a factory reset (button held 15 s) removes them.</p></details>`;
+  $("ssh").innerHTML = h;
+  const act = async form => {
+    document.querySelectorAll("#ssh button").forEach(b => b.disabled = true);
+    let r;
+    try { r = await loginPost("ssh", "save", form); $("ssh-msg").textContent = await r.text(); }
+    catch (e) { $("ssh-msg").textContent = e.message; }
+    document.querySelectorAll("#ssh button").forEach(b => b.disabled = false);
+    if (r && r.ok) { const m = $("ssh-msg").textContent; await ssh(true); $("ssh-msg").textContent = m; }
+  };
+  $("ssh-add").addEventListener("click", () => act({ action: "add", key: $("ssh-key").value }));
+  document.querySelectorAll("#ssh [data-rm]").forEach(b => b.addEventListener("click", () => act({ action: "remove", index: b.dataset.rm })));
+  if ($("ssh-show")) $("ssh-show").addEventListener("click", () => ssh(true));
+}
+async function ssh(withList) {
+  try {
+    const d = await (await fetch("api/ssh", { cache: "no-store" })).json();
+    let list = null;
+    if (withList) { const r = await fetch("api/ssh/keys", { cache: "no-store" }); if (r.ok) list = await r.json(); }
+    renderSsh(d, list);
+  } catch (e) {}
+}
+ssh(false);
 
 // --- Backup -----------------------------------------------------------------------------------------------------
 function renderBackup(d) {

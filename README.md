@@ -6,9 +6,9 @@ An open-source Yocto Linux image that turns a retired **Bobcat Miner 300** Heliu
 sensors work on your LAN without any cloud service. Its MQTT integration feeds Home Assistant, Node-RED or anything
 else that speaks MQTT.
 
-> **Status: alpha, running on hardware.** A G285 board runs it as a gateway: the radio receives and sends, a real
+> **Status: 1.0, running on hardware.** A G285 board runs it as a gateway: the radio receives and sends, a real
 > LoRaWAN node joins the local ChirpStack, frames are forwarded to The Things Network, and the system installs onto
-> the eMMC and updates itself A/B from the web panel, and a new gateway is set up from a phone. Pre-releases (card
+> the eMMC and updates itself A/B from the web panel, and a new gateway is set up from a phone. Releases (card
 > image and signed update bundle) are on the [Releases](https://github.com/kajoj2/bobcat-lorawan-os/releases) page;
 > or build it yourself. Still open: a card install
 > reported from an untouched Bobcat (tested with Rockchip's own boot loader standing in for the factory one).
@@ -29,6 +29,30 @@ to say which hardware the image runs on.
 | Planned | G280, G290/G295 (other RK3566 revisions), US915 |
 
 Hardware notes, each fact with its source: [docs/hardware-g285.md](docs/hardware-g285.md).
+
+## Quick start
+
+You need a Bobcat Miner 300 **G285** (the serial number on the label starts with `285`), its 12 V supply, a microSD
+card of 8 GB or more and a phone. Nothing is soldered or opened besides the card slot, and the factory system on the
+eMMC stays as it is until you choose to replace it.
+
+1. **Download** `lorawan-gateway-os-<version>-bobcat-g285.wic.xz` from the
+   [latest release](https://github.com/kajoj2/bobcat-lorawan-os/releases/latest).
+2. **Write it to the card** with [balenaEtcher](https://etcher.balena.io/) or Raspberry Pi Imager ("Use custom"), or
+   `bmaptool` / `dd` ([docs/flashing.md](docs/flashing.md)).
+3. **Boot**: card into the slot on the board, Ethernet cable if you have one, then power. The front LED turns red,
+   then blinks green when the gateway is up (blue: no network yet).
+4. **Set it up from a phone**: about two minutes after power-on a gateway without a network opens the Wi-Fi
+   `bobcat-setup-XXXX`; join it and the setup wizard opens (or go to `http://192.168.4.1/setup`). On a cable, open
+   `http://bobcat-g285.local/setup` from your LAN instead. The wizard sets Wi-Fi, The Things Network sharing and,
+   optionally, the install onto the eMMC ([docs/setup.md](docs/setup.md)).
+5. **Use it**: status panel `http://bobcat-g285.local/`, ChirpStack `http://bobcat-g285.local:8080` (admin / admin;
+   change it there). Add your sensors in ChirpStack; their data is on MQTT and, with the panel's card, in Home
+   Assistant. For a shell, add your SSH public key on the panel (card "SSH keys"), then `ssh root@bobcat-g285.local`.
+
+Updates come from the panel (System update → From GitHub). Something not working:
+[docs/troubleshooting.md](docs/troubleshooting.md). Using an AI coding agent to install or change it: point it at
+[AGENTS.md](AGENTS.md).
 
 ## What is in the image
 
@@ -79,7 +103,7 @@ cd bobcat-lorawan-os
 kas build kas/bobcat-g285.yml          # or: kas-container build kas/bobcat-g285.yml
 ```
 
-To log in over SSH, add your public key before building, e.g. in a small kas overlay:
+SSH keys can be added on the panel later (card "SSH keys"), or built into your image, e.g. with a small kas overlay:
 
 ```yaml
 # my-keys.yml
@@ -107,7 +131,8 @@ tests in it (everything but the radio): [docs/testing.md](docs/testing.md).
 | `meta-bobcat/` | Board support: machine, device tree, kernel config |
 | `meta-lorawan/` | Board-independent gateway: distro, ChirpStack stack, image, configuration, setup wizard's access point |
 | `lorawan-agent/` | The web panel, setup wizard, LED status and diagnostics (Rust, no crate dependencies) |
-| `docs/` | Hardware notes, architecture, decisions, bring-up checklist |
+| `docs/` | Hardware notes, architecture, decisions, bring-up checklist, troubleshooting |
+| `AGENTS.md` | Instructions for AI coding agents: installing a gateway, checking it, and working on this repository |
 | `tools/` | Device tree check, crates.inc generator and check, update signing keys (`rauc-keys.sh`), lock updates |
 | `.github/workflows/` | Checks on every pull request, full builds, nightly lock updates, signed releases ([docs/releasing.md](docs/releasing.md)) |
 

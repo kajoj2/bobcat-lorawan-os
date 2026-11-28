@@ -289,7 +289,8 @@ async function done() {
   let h = `<h2>Done</h2><div class="okbox">The gateway is set up.</div><dl>` +
     `<dt>Status panel</dt><dd><a href="${esc(panelUrl())}">${esc(panelUrl())}</a></dd>` +
     `<dt>ChirpStack</dt><dd><a href="${esc(chirpstackUrl())}" target="_blank" rel="noopener">${esc(chirpstackUrl())}</a><br><span class="note">admin / admin: change it there (top right, admin → Change password)</span></dd>` +
-    `<dt>Gateway EUI</dt><dd class="mono">${esc(id)}</dd></dl>`;
+    `<dt>Gateway EUI</dt><dd class="mono">${esc(id)}</dd>` +
+    `<dt>SSH (optional)</dt><dd><span class="note">add your public key on the status panel, card “SSH keys”, then <span class="mono">ssh root@${esc(S.via_ap ? hostLocal() : location.hostname)}</span></span></dd></dl>`;
   if (ttn.length) {
     h += `<p><b>Register the gateway on The Things Network</b> (once): in the <a href="https://console.cloud.thethings.network/" target="_blank" rel="noopener">TTN Console</a> ` +
       `pick the cluster you chose (${ttn.map(x => esc(x.server.split(".")[0])).join(", ")}), then Gateways → Register gateway, Gateway EUI ` +

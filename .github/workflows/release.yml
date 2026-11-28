@@ -132,5 +132,29 @@ jobs:
         run: |
           # A tag with a suffix (v0.1.0-rc1) is a pre-release
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre= ;; esac
+          # How to install comes first; the merged pull requests follow (--generate-notes appends them).
+          base="lorawan-gateway-os-${GITHUB_REF_NAME#v}-bobcat-g285"
+          docs="https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/docs"
+          cat > notes.md <<NOTES
+          ## Install
+
+          For a **Bobcat Miner 300, board revision G285** (serial number starts with \`285\`), EU868.
+
+          1. Download \`$base.wic.xz\` (and \`.wic.bmap\`, \`SHA256SUMS\`); check it: \`sha256sum -c --ignore-missing SHA256SUMS\`.
+          2. Write it to a microSD card (8 GB or more): [balenaEtcher](https://etcher.balena.io/) or Raspberry Pi Imager
+             ("Use custom"), or \`bmaptool copy $base.wic.xz /dev/sdX\`. The eMMC is not touched.
+          3. Card into the gateway, Ethernet if you have it, 12 V on. The front LED goes red, then blinks green (blue: no network).
+          4. Set it up from a phone: join the Wi-Fi \`bobcat-setup-XXXX\` (about 2 minutes after power-on, only without a network),
+             or open \`http://bobcat-g285.local/setup\` on your LAN.
+          5. Panel \`http://bobcat-g285.local/\`, ChirpStack \`http://bobcat-g285.local:8080\` (admin / admin). SSH: add your public key
+             on the panel (card "SSH keys"), then \`ssh root@bobcat-g285.local\`.
+
+          Already running LoRaWAN Gateway OS? Panel → System update → From GitHub → Install (or upload \`$base.raucb\`).
+
+          Guides: [flashing]($docs/flashing.md) · [setup wizard]($docs/setup.md) · [updates]($docs/updates.md) ·
+          [troubleshooting]($docs/troubleshooting.md). Check where a file came from:
+          \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`.
+
+          NOTES
           gh release create "$GITHUB_REF_NAME" images/* -R "$GITHUB_REPOSITORY" --verify-tag $pre \
-            --title "LoRaWAN Gateway OS $GITHUB_REF_NAME" --generate-notes
+            --title "LoRaWAN Gateway OS $GITHUB_REF_NAME" --notes-file notes.md --generate-notes

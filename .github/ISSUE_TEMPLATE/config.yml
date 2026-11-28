@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+blank_issues_enabled: true
+contact_links:
+  - name: Install guide
+    url: https://github.com/kajoj2/bobcat-lorawan-os#quick-start
+    about: Quick start, flashing and the setup wizard
+  - name: Security issue
+    url: https://github.com/kajoj2/bobcat-lorawan-os/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately, as SECURITY.md describes
